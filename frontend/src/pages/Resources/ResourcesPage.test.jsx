@@ -239,3 +239,64 @@ describe("ResourcesPage — Share link", () => {
     expect(writeText.mock.calls[0][0]).toBe(window.location.href);
   });
 });
+
+describe("ResourcesPage — bulk action wiring", () => {
+  function selectFirstTwo() {
+    fireEvent.click(screen.getByTestId("resources-checkbox-i-0a4f8c2d09b3e7a11"));
+    fireEvent.click(screen.getByTestId("resources-checkbox-db-finance-prod-1"));
+  }
+
+  it("Apply tag… opens the ApplyTagModal with the selected resource ids", () => {
+    renderAt("/resources");
+    selectFirstTwo();
+    fireEvent.click(screen.getByTestId("resources-bulk-apply-tag"));
+    // ApplyTagModal is rendered with data-testid prefix 'atm-' for its inputs
+    expect(screen.getByTestId("atm-cancel")).toBeInTheDocument();
+  });
+
+  it("Hibernate shows a toast and clears selection", () => {
+    renderAt("/resources");
+    selectFirstTwo();
+    fireEvent.click(screen.getByTestId("resources-bulk-hibernate"));
+    expect(screen.getByTestId("resources-bulk-toast")).toHaveTextContent(/Queued 2 resources for hibernation/);
+    expect(screen.queryByTestId("resources-bulk-action-bar")).not.toBeInTheDocument();
+  });
+
+  it("Export selected triggers a blob download", () => {
+    renderAt("/resources");
+    selectFirstTwo();
+    const createObjectURL = vi.fn(() => "blob:selected");
+    const revokeObjectURL = vi.fn();
+    const origCreate = URL.createObjectURL;
+    const origRevoke = URL.revokeObjectURL;
+    URL.createObjectURL = createObjectURL;
+    URL.revokeObjectURL = revokeObjectURL;
+    try {
+      fireEvent.click(screen.getByTestId("resources-bulk-export"));
+      expect(createObjectURL).toHaveBeenCalledTimes(1);
+      expect(revokeObjectURL).toHaveBeenCalledWith("blob:selected");
+    } finally {
+      URL.createObjectURL = origCreate;
+      URL.revokeObjectURL = origRevoke;
+    }
+  });
+});
+
+describe("ResourcesPage — Manage all views", () => {
+  it("clicking Manage all views… opens a dialog listing saved views", () => {
+    renderAt("/resources");
+    fireEvent.click(screen.getByTestId("resources-views-button"));
+    fireEvent.click(screen.getByTestId("resources-manage-views"));
+    const dialog = screen.getByTestId("resources-manage-views-dialog");
+    expect(dialog).toHaveTextContent(/All resources/);
+    expect(dialog).toHaveTextContent(/Manage saved views/);
+  });
+
+  it("close button dismisses the dialog", () => {
+    renderAt("/resources");
+    fireEvent.click(screen.getByTestId("resources-views-button"));
+    fireEvent.click(screen.getByTestId("resources-manage-views"));
+    fireEvent.click(screen.getByTestId("resources-manage-views-close"));
+    expect(screen.queryByTestId("resources-manage-views-dialog")).not.toBeInTheDocument();
+  });
+});

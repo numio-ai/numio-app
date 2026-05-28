@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useSearchParams, useNavigate } from "react-router-dom";
+import ApplyTagModal from "../../components/ApplyTagModal";
 import {
   RESOURCES_ALL,
   TOTAL_RESOURCES_COUNT,
@@ -109,7 +110,7 @@ function renderCell(r, col) {
   }
 }
 
-function ViewsPicker({ activeId, onSelect }) {
+function ViewsPicker({ activeId, onSelect, onManage }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
   useOutsideClick(ref, () => setOpen(false), open);
@@ -173,7 +174,12 @@ function ViewsPicker({ activeId, onSelect }) {
             );
           })}
           <div style={{ height: 1, background: "#f3f4f6", margin: "6px 0" }} />
-          <button type="button" style={{ width: "100%", textAlign: "left", padding: "6px 8px", fontSize: 12, color: "#6b7280", background: "transparent", border: "none", borderRadius: 6, cursor: "pointer" }}>
+          <button
+            type="button"
+            data-testid="resources-manage-views"
+            onClick={() => { setOpen(false); onManage?.(); }}
+            style={{ width: "100%", textAlign: "left", padding: "6px 8px", fontSize: 12, color: "#6b7280", background: "transparent", border: "none", borderRadius: 6, cursor: "pointer" }}
+          >
             Manage all views…
           </button>
         </div>
@@ -293,6 +299,66 @@ function triggerDownload(filename, content, mime = "text/csv") {
   URL.revokeObjectURL(url);
 }
 
+function ManageViewsDialog({ onClose }) {
+  return (
+    <div
+      role="dialog"
+      aria-label="Manage saved views"
+      data-testid="resources-manage-views-dialog"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100 }}
+    >
+      <div style={{ background: "#fff", borderRadius: 12, padding: 24, width: 440, boxShadow: "0 18px 60px rgba(0,0,0,0.18)", fontFamily: "Inter, system-ui, sans-serif" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+          <h2 style={{ fontSize: 16, fontWeight: 600, color: "#111827", margin: 0 }}>Manage saved views</h2>
+          <button type="button" data-testid="resources-manage-views-close" onClick={onClose} aria-label="Close" style={{ background: "transparent", border: "none", color: "#6b7280", fontSize: 18, cursor: "pointer" }}>×</button>
+        </div>
+        <p style={{ fontSize: 12, color: "#6b7280", margin: "0 0 12px" }}>
+          Rename, share, or delete saved views. Bulk view management lands in a follow-up; this dialog lists current views.
+        </p>
+        <ul style={{ listStyle: "none", padding: 0, margin: 0, maxHeight: 320, overflowY: "auto" }}>
+          {RES_SAVED_VIEWS.map((v) => (
+            <li
+              key={v.id}
+              data-testid={`resources-manage-views-row-${v.id}`}
+              style={{ display: "flex", justifyContent: "space-between", padding: "8px 4px", fontSize: 13, color: "#111827", borderBottom: "1px solid #f3f4f6" }}
+            >
+              <span>{v.label}</span>
+              <span style={{ fontSize: 11, color: "#9ca3af" }}>
+                {v.owner === "you" ? "you" : v.owner === "shared" ? "shared" : v.owner}
+              </span>
+            </li>
+          ))}
+        </ul>
+        <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 16 }}>
+          <button type="button" onClick={onClose} style={{ padding: "6px 14px", fontSize: 13, color: "#fff", background: "#111827", border: "none", borderRadius: 6, cursor: "pointer" }}>Close</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function BulkActionToast({ message, onDismiss }) {
+  useEffect(() => {
+    const id = setTimeout(onDismiss, 3000);
+    return () => clearTimeout(id);
+  }, [onDismiss]);
+  return (
+    <div
+      data-testid="resources-bulk-toast"
+      role="status"
+      style={{
+        position: "fixed", bottom: 24, left: "50%", transform: "translateX(-50%)",
+        zIndex: 200, padding: "10px 18px",
+        background: "#111827", color: "#fff", borderRadius: 8, fontSize: 13,
+        boxShadow: "0 8px 24px rgba(0,0,0,0.18)",
+      }}
+    >
+      {message}
+    </div>
+  );
+}
+
 function ResourceDetailPanel({ resource, onClose }) {
   if (!resource) return null;
   return (
@@ -396,8 +462,12 @@ export default function ResourcesPage() {
   const [showBackToTop, setShowBackToTop] = useState(false);
   const [detailResource, setDetailResource] = useState(null);
   const [menuOpenFor, setMenuOpenFor] = useState(null);
+  const [applyTagOpen, setApplyTagOpen] = useState(false);
+  const [manageViewsOpen, setManageViewsOpen] = useState(false);
+  const [bulkToast, setBulkToast] = useState(null);
   const sentinelRef = useRef(null);
   const scrollerRef = useRef(null);
+  const navigate = useNavigate();
 
   const setView = useCallback((v) => {
     setParams((prev) => {
@@ -491,6 +561,27 @@ export default function ResourcesPage() {
     }
   }, []);
 
+  const selectedIds = useMemo(() => Object.keys(selected).filter((k) => selected[k]), [selected]);
+  const selectedRows = useMemo(
+    () => RESOURCES_ALL.filter((r) => selectedIds.includes(r.id)),
+    [selectedIds]
+  );
+
+  const handleHibernate = useCallback(() => {
+    setBulkToast(`Queued ${selectedIds.length} resource${selectedIds.length === 1 ? "" : "s"} for hibernation`);
+    setSelected({});
+  }, [selectedIds.length]);
+
+  const handleSendToRecommendations = useCallback(() => {
+    setSelected({});
+    navigate("/recommendations");
+  }, [navigate]);
+
+  const handleExportSelected = useCallback(() => {
+    const csv = buildResourcesCsv(selectedRows, cols);
+    triggerDownload(`resources-selected.csv`, csv);
+  }, [selectedRows, cols]);
+
   return (
     <div
       ref={scrollerRef}
@@ -510,7 +601,7 @@ export default function ResourcesPage() {
       </div>
 
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
-        <ViewsPicker activeId={viewId} onSelect={setView} />
+        <ViewsPicker activeId={viewId} onSelect={setView} onManage={() => setManageViewsOpen(true)} />
         <button
           type="button"
           data-testid="resources-share-link"
@@ -595,10 +686,38 @@ export default function ResourcesPage() {
         >
           <span style={{ fontWeight: 600 }}>{selCount} selected</span>
           <span style={{ color: "#6366f1" }}>·</span>
-          <button type="button" style={{ fontSize: 12, fontWeight: 500, color: "#4338ca", background: "#fff", border: "1px solid #c7d2fe", borderRadius: 6, padding: "4px 10px", cursor: "pointer" }}>Apply tag…</button>
-          <button type="button" style={{ fontSize: 12, fontWeight: 500, color: "#4338ca", background: "#fff", border: "1px solid #c7d2fe", borderRadius: 6, padding: "4px 10px", cursor: "pointer" }}>Hibernate</button>
-          <button type="button" style={{ fontSize: 12, fontWeight: 500, color: "#4338ca", background: "#fff", border: "1px solid #c7d2fe", borderRadius: 6, padding: "4px 10px", cursor: "pointer" }}>Send to Recommendations</button>
-          <button type="button" style={{ fontSize: 12, fontWeight: 500, color: "#4338ca", background: "#fff", border: "1px solid #c7d2fe", borderRadius: 6, padding: "4px 10px", cursor: "pointer" }}>Export selected</button>
+          <button
+            type="button"
+            data-testid="resources-bulk-apply-tag"
+            onClick={() => setApplyTagOpen(true)}
+            style={{ fontSize: 12, fontWeight: 500, color: "#4338ca", background: "#fff", border: "1px solid #c7d2fe", borderRadius: 6, padding: "4px 10px", cursor: "pointer" }}
+          >
+            Apply tag…
+          </button>
+          <button
+            type="button"
+            data-testid="resources-bulk-hibernate"
+            onClick={handleHibernate}
+            style={{ fontSize: 12, fontWeight: 500, color: "#4338ca", background: "#fff", border: "1px solid #c7d2fe", borderRadius: 6, padding: "4px 10px", cursor: "pointer" }}
+          >
+            Hibernate
+          </button>
+          <button
+            type="button"
+            data-testid="resources-bulk-send-recs"
+            onClick={handleSendToRecommendations}
+            style={{ fontSize: 12, fontWeight: 500, color: "#4338ca", background: "#fff", border: "1px solid #c7d2fe", borderRadius: 6, padding: "4px 10px", cursor: "pointer" }}
+          >
+            Send to Recommendations
+          </button>
+          <button
+            type="button"
+            data-testid="resources-bulk-export"
+            onClick={handleExportSelected}
+            style={{ fontSize: 12, fontWeight: 500, color: "#4338ca", background: "#fff", border: "1px solid #c7d2fe", borderRadius: 6, padding: "4px 10px", cursor: "pointer" }}
+          >
+            Export selected
+          </button>
           <span style={{ flex: 1 }} />
           <button
             type="button"
@@ -757,6 +876,17 @@ export default function ResourcesPage() {
       </div>
 
       <ResourceDetailPanel resource={detailResource} onClose={() => setDetailResource(null)} />
+      {applyTagOpen && (
+        <ApplyTagModal
+          resourceIds={selectedIds}
+          onClose={() => setApplyTagOpen(false)}
+          onApplied={() => { setApplyTagOpen(false); setSelected({}); }}
+        />
+      )}
+      {manageViewsOpen && (
+        <ManageViewsDialog onClose={() => setManageViewsOpen(false)} />
+      )}
+      {bulkToast && <BulkActionToast message={bulkToast} onDismiss={() => setBulkToast(null)} />}
     </div>
   );
 }
