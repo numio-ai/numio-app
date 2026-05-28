@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { request, gracefulRequest, ApiError } from "./client";
-import { getNotifications, getInfraPolicies, getTotalCost } from "./dashboard";
+import { getNotifications, getInfraPolicies, getTotalCost, getNotificationStreamUrl } from "./dashboard";
 import { getCfnTemplate } from "./onboarding";
 import { inviteUser } from "./workspace";
 
@@ -136,6 +136,21 @@ describe("request() — json option", () => {
     const [, init] = spy.mock.calls[0];
     expect(init.body).toBe(JSON.stringify({ email: "a@b.co", name: "Ann", role: "admin" }));
     expect(init.headers["Content-Type"]).toBe("application/json");
+  });
+});
+
+describe("getNotificationStreamUrl()", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("returns the SSE URL in real mode", () => {
+    expect(getNotificationStreamUrl()).toBe("/api/v1/notifications/stream");
+  });
+
+  it("returns null in mock mode so NotificationContext skips opening the EventSource", () => {
+    vi.stubEnv("VITE_API_MODE", "mock");
+    expect(getNotificationStreamUrl()).toBeNull();
   });
 });
 

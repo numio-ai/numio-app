@@ -292,8 +292,9 @@ export async function markAllNotificationsRead() {
   return request("/api/v1/notifications/read-all", { method: "POST" });
 }
 
-/** SSE stream URL for real-time notifications. */
+/** SSE stream URL for real-time notifications. Returns null in mock mode — no SSE server exists. */
 export function getNotificationStreamUrl() {
+  if (import.meta.env.VITE_API_MODE === "mock") return null;
   return `${BASE}/api/v1/notifications/stream`;
 }
 

@@ -1,0 +1,51 @@
+---
+status: done
+kind: bug
+title: fix: skip SSE notifications stream in mock mode
+---
+
+# fix: skip SSE notifications stream in mock mode
+
+## Problem statement
+
+In mock mode (`VITE_API_MODE=mock`), `NotificationContext` opens an SSE EventSource connection to `/api/v1/notifications/stream`. The mock dispatch seam does not handle SSE — only fetch-based requests — so the connection falls through to the Vite dev server proxy, which fails with `ECONNREFUSED` when no backend is running.
+
+Symptom: vite frontend log shows `[vite] http proxy error: /api/v1/notifications/stream  AggregateError [ECONNREFUSED]` on every load. EventSource then retries forever, producing continuous noise.
+
+## Scope
+
+In scope:
+- Skip opening the EventSource in mock mode.
+- Have `getNotificationStreamUrl()` return null (or empty) when `VITE_API_MODE === 'mock'`, since the upstream consumer already guards on falsy URL (NotificationContext.jsx:69 `if (!url) return;`).
+
+Out of scope:
+- Implementing SSE in mock mode (push-style updates aren't required for demo).
+- Reworking notifications polling.
+
+## Acceptance criteria
+
+1. With `VITE_API_MODE=mock`, no `/api/v1/notifications/stream` request appears in browser network log.
+2. With `VITE_API_MODE=mock`, vite dev server log shows no `http proxy error: /api/v1/notifications/stream` line.
+3. With `VITE_API_MODE` unset (real mode), behavior is unchanged: EventSource opens to backend.
+4. Unit test asserts `getNotificationStreamUrl()` returns null in mock mode.
+
+## Quality gates
+
+- Frontend test suite passes (`npm test`).
+- Manual smoke: load app in mock mode, check vite log is clean.
+
+## Summary
+
+### Steps completed
+1. Modified `getNotificationStreamUrl()` in `frontend/src/api/dashboard.js` to return `null` when `VITE_API_MODE === "mock"`. `NotificationContext.jsx:69` already guards on falsy URL.
+2. Added two unit tests in `frontend/src/api/client.test.js`: one asserts real-mode returns the SSE URL, one asserts mock-mode returns null.
+3. Ran the Vitest suite — all 17 tests in `client.test.js` pass.
+4. Verified in live browser at `http://localhost:5173/inbox` in mock mode — `performance.getEntriesByType('resource')` shows zero attempts to `/notifications/stream`.
+
+### Changes made
+- `frontend/src/api/dashboard.js` — 1-line guard added to `getNotificationStreamUrl()`.
+- `frontend/src/api/client.test.js` — new `describe("getNotificationStreamUrl()")` block with 2 tests.
+
+### Notable decisions
+- Did not implement mock SSE — push notifications are not required for demo mode.
+- Test placed in existing `client.test.js` (where `dashboard.js` exports are already tested) rather than a new file, per repo convention.
