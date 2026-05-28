@@ -198,3 +198,62 @@ describe("AutopilotPage — bulk actions", () => {
     expect(screen.queryByTestId("rules-bulk-action-bar")).not.toBeInTheDocument();
   });
 });
+
+describe("AutopilotPage — Edit / Duplicate / View runs", () => {
+  function openMenu(ruleId) {
+    fireEvent.click(screen.getByTestId(`rule-row-menu-${ruleId}`));
+  }
+
+  it("Edit opens the edit dialog prefilled with the rule's name", () => {
+    renderAt("/autopilot");
+    openMenu("rule-hibernate-dev");
+    fireEvent.click(screen.getByTestId("rule-menu-edit-rule-hibernate-dev"));
+    expect(screen.getByTestId("autopilot-edit-rule-dialog")).toBeInTheDocument();
+    expect(screen.getByTestId("autopilot-edit-rule-name")).toHaveValue("Hibernate dev/sandbox nightly");
+  });
+
+  it("Saving the edit updates the rule's name in the table", () => {
+    renderAt("/autopilot");
+    openMenu("rule-hibernate-dev");
+    fireEvent.click(screen.getByTestId("rule-menu-edit-rule-hibernate-dev"));
+    fireEvent.change(screen.getByTestId("autopilot-edit-rule-name"), { target: { value: "Hibernate dev nightly v2" } });
+    fireEvent.click(screen.getByTestId("autopilot-edit-rule-save"));
+    expect(screen.queryByTestId("autopilot-edit-rule-dialog")).not.toBeInTheDocument();
+    expect(screen.getByText(/Hibernate dev nightly v2/)).toBeInTheDocument();
+  });
+
+  it("Duplicate appends a new row with '(copy)' suffix", () => {
+    renderAt("/autopilot");
+    openMenu("rule-hibernate-dev");
+    fireEvent.click(screen.getByTestId("rule-menu-duplicate-rule-hibernate-dev"));
+    expect(screen.getByText(/Hibernate dev\/sandbox nightly \(copy\)/)).toBeInTheDocument();
+  });
+
+  it("View runs switches to History tab and applies the rule filter", () => {
+    renderAt("/autopilot");
+    openMenu("rule-hibernate-dev");
+    fireEvent.click(screen.getByTestId("rule-menu-view-runs-rule-hibernate-dev"));
+    expect(screen.getByTestId("autopilot-tab-history")).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByTestId("history-rule-filter-clear")).toHaveTextContent(/Hibernate dev\/sandbox nightly/);
+  });
+});
+
+describe("AutopilotPage — History Export CSV", () => {
+  it("clicking Export CSV creates a blob and triggers download", () => {
+    renderAt("/autopilot?tab=history");
+    const createObjectURL = vi.fn(() => "blob:autopilot");
+    const revokeObjectURL = vi.fn();
+    const origCreate = URL.createObjectURL;
+    const origRevoke = URL.revokeObjectURL;
+    URL.createObjectURL = createObjectURL;
+    URL.revokeObjectURL = revokeObjectURL;
+    try {
+      fireEvent.click(screen.getByTestId("history-export-csv"));
+      expect(createObjectURL).toHaveBeenCalledTimes(1);
+      expect(revokeObjectURL).toHaveBeenCalledWith("blob:autopilot");
+    } finally {
+      URL.createObjectURL = origCreate;
+      URL.revokeObjectURL = origRevoke;
+    }
+  });
+});

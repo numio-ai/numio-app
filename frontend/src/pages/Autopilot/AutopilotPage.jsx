@@ -367,20 +367,65 @@ function RulesTab({
   );
 }
 
-function HistoryTab({ history }) {
+function HistoryTab({ history, rules, ruleFilter, setRuleFilter }) {
+  const filtered = useMemo(() => {
+    if (!ruleFilter) return history;
+    const rule = rules.find((r) => r.id === ruleFilter);
+    if (!rule) return history;
+    return history.filter((h) => h.rule === rule.name);
+  }, [history, rules, ruleFilter]);
+
+  const activeRule = rules.find((r) => r.id === ruleFilter);
+
+  const onExportCsv = () => {
+    const headers = ["when", "rule", "target", "outcome", "saved"];
+    const escape = (v) => {
+      const s = v == null ? "" : String(v);
+      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    const lines = [headers.join(",")];
+    for (const h of filtered) {
+      lines.push([h.when, h.rule, h.target, h.outcome, h.saved].map(escape).join(","));
+    }
+    const blob = new Blob([lines.join("\n")], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "autopilot-history.csv";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
-        <span style={{ padding: "5px 10px", fontSize: 12, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 6, color: C.muted }}>Rule: All ▾</span>
+        <button
+          type="button"
+          data-testid="history-rule-filter-clear"
+          onClick={() => setRuleFilter("")}
+          disabled={!ruleFilter}
+          style={{ padding: "5px 10px", fontSize: 12, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 6, color: ruleFilter ? C.text : C.muted, cursor: ruleFilter ? "pointer" : "default" }}
+        >
+          Rule: {activeRule ? activeRule.name : "All"}{ruleFilter ? " ×" : " ▾"}
+        </button>
         <span style={{ padding: "5px 10px", fontSize: 12, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 6, color: C.muted }}>Time: Last 7 days ▾</span>
         <span style={{ padding: "5px 10px", fontSize: 12, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 6, color: C.muted }}>Outcome: Any ▾</span>
         <span style={{ padding: "5px 10px", fontSize: 12, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 6, color: C.muted }}>Target: Any ▾</span>
         <span style={{ flex: 1 }} />
-        <button type="button" style={btnGhost}>Export CSV</button>
+        <button
+          type="button"
+          data-testid="history-export-csv"
+          onClick={onExportCsv}
+          style={btnGhost}
+        >
+          Export CSV
+        </button>
       </div>
 
       <p style={{ fontSize: 12, color: C.muted, margin: "0 0 12px" }}>
-        {history.length} actions in the last 7 days · ${history.reduce((a, b) => a + (b.saved || 0), 0).toLocaleString()} saved ·{" "}
+        {filtered.length} actions in the last 7 days · ${filtered.reduce((a, b) => a + (b.saved || 0), 0).toLocaleString()} saved ·{" "}
         <a href="/govern/audit" style={{ color: C.ai2, fontWeight: 500 }}>Full audit log →</a>
       </p>
 
@@ -398,7 +443,7 @@ function HistoryTab({ history }) {
           <span>WHEN</span><span>RULE</span><span>TARGET</span><span>OUTCOME</span>
           <span style={{ textAlign: "right" }}>SAVED</span><span>UNDO</span><span />
         </div>
-        {history.map((h, idx) => {
+        {filtered.map((h, idx) => {
           const tone = outcomeChipTone(h.outcome);
           const undo = undoStateFor(h);
           return (
@@ -409,7 +454,7 @@ function HistoryTab({ history }) {
                 display: "grid",
                 gridTemplateColumns: "130px 1fr 1fr 100px 80px 140px 28px",
                 gap: 12, padding: "10px 14px", alignItems: "center",
-                borderBottom: idx < history.length - 1 ? "1px solid #f3f4f6" : "none",
+                borderBottom: idx < filtered.length - 1 ? "1px solid #f3f4f6" : "none",
                 fontSize: 12, color: C.text2,
               }}
             >
@@ -465,6 +510,8 @@ export default function AutopilotPage() {
   const [newRuleOpen, setNewRuleOpen] = useState(params.get("new") === "true");
   const [pendingAutopilotRec, setPendingAutopilotRec] = useState(null);
   const [deleteRule, setDeleteRule] = useState(null);
+  const [editRule, setEditRule] = useState(null);
+  const [historyRuleFilter, setHistoryRuleFilter] = useState("");
   const [pauseAllOpen, setPauseAllOpen] = useState(false);
   const { pausedAll } = useAutopilotStatus();
 
@@ -498,6 +545,37 @@ export default function AutopilotPage() {
     if (action === "delete") {
       const rule = rules.find((r) => r.id === id);
       if (rule) setDeleteRule(rule);
+      return;
+    }
+    if (action === "duplicate") {
+      const rule = rules.find((r) => r.id === id);
+      if (!rule) return;
+      const copy = {
+        ...rule,
+        id: `${rule.id}-copy-${Date.now()}`,
+        name: `${rule.name} (copy)`,
+        state: "paused",
+        runs7d: 0,
+        saved7d: 0,
+        lastRun: "—",
+        archived: false,
+      };
+      setRules((prev) => {
+        const idx = prev.findIndex((r) => r.id === id);
+        const next = [...prev];
+        next.splice(idx + 1, 0, copy);
+        return next;
+      });
+      return;
+    }
+    if (action === "edit") {
+      const rule = rules.find((r) => r.id === id);
+      if (rule) setEditRule(rule);
+      return;
+    }
+    if (action === "view-runs") {
+      setHistoryRuleFilter(id);
+      setTab("history");
       return;
     }
   };
@@ -631,7 +709,7 @@ export default function AutopilotPage() {
           onRowAction={onRowAction}
         />
       ) : (
-        <HistoryTab history={history} />
+        <HistoryTab history={history} rules={rules} ruleFilter={historyRuleFilter} setRuleFilter={setHistoryRuleFilter} />
       )}
 
       {newRuleOpen && (
@@ -654,6 +732,62 @@ export default function AutopilotPage() {
       {pauseAllOpen && (
         <PauseAllConfirmDialog onCancel={() => setPauseAllOpen(false)} onConfirm={handlePauseAll} />
       )}
+      {editRule && (
+        <EditRuleDialog
+          rule={editRule}
+          onCancel={() => setEditRule(null)}
+          onSave={(patch) => {
+            setRules((prev) => prev.map((r) => r.id === editRule.id ? { ...r, ...patch } : r));
+            setEditRule(null);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function EditRuleDialog({ rule, onCancel, onSave }) {
+  const [name, setName] = useState(rule.name);
+  const [description, setDescription] = useState(rule.description || "");
+  return (
+    <div
+      role="dialog"
+      aria-label="Edit rule"
+      data-testid="autopilot-edit-rule-dialog"
+      style={{
+        position: "fixed", inset: 0, background: "rgba(15,23,42,0.45)",
+        display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100,
+      }}
+    >
+      <div style={{ background: "#fff", borderRadius: 12, padding: 24, width: 460, boxShadow: "0 18px 60px rgba(0,0,0,0.18)", fontFamily: "Inter, system-ui, sans-serif" }}>
+        <h2 style={{ fontSize: 16, fontWeight: 600, color: "#111827", margin: 0, marginBottom: 14 }}>Edit rule</h2>
+        <label style={{ display: "block", fontSize: 11, fontWeight: 500, color: "#9ca3af", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 }}>Name</label>
+        <input
+          data-testid="autopilot-edit-rule-name"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          style={{ width: "100%", boxSizing: "border-box", padding: "8px 10px", fontSize: 13, border: "1px solid #e5e5e5", borderRadius: 6, marginBottom: 12 }}
+        />
+        <label style={{ display: "block", fontSize: 11, fontWeight: 500, color: "#9ca3af", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 }}>Description</label>
+        <textarea
+          data-testid="autopilot-edit-rule-description"
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          rows={3}
+          style={{ width: "100%", boxSizing: "border-box", padding: "8px 10px", fontSize: 13, border: "1px solid #e5e5e5", borderRadius: 6, marginBottom: 16, fontFamily: "inherit" }}
+        />
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+          <button type="button" onClick={onCancel} style={{ padding: "6px 14px", fontSize: 13, color: "#374151", background: "#fff", border: "1px solid #e5e5e5", borderRadius: 6, cursor: "pointer" }}>Cancel</button>
+          <button
+            type="button"
+            data-testid="autopilot-edit-rule-save"
+            onClick={() => onSave({ name, description })}
+            style={{ padding: "6px 14px", fontSize: 13, color: "#fff", background: "#111827", border: "none", borderRadius: 6, cursor: "pointer" }}
+          >
+            Save changes
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
