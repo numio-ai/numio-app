@@ -7,14 +7,13 @@ import { request } from "./client";
 export async function createSession(title) {
   return request("/api/v1/chat/sessions", {
     method: "POST",
-    body: JSON.stringify(title ? { title } : {}),
+    json: title ? { title } : {},
   });
 }
 
 /** List active chat sessions. */
 export async function listSessions(limit = 50, offset = 0) {
-  const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
-  return request(`/api/v1/chat/sessions?${params}`);
+  return request("/api/v1/chat/sessions", { params: { limit, offset } });
 }
 
 /** Get session detail including message history. */
@@ -31,6 +30,6 @@ export async function deleteSession(sessionId) {
 export async function sendChatMessage(sessionId, message) {
   return request(`/api/v1/chat/sessions/${sessionId}/messages`, {
     method: "POST",
-    body: JSON.stringify({ message }),
+    json: { message },
   });
 }

@@ -18,14 +18,14 @@ export async function getPolicy(id) {
 export async function createPolicy(data) {
   return request("/api/v1/tag-policies", {
     method: "POST",
-    body: JSON.stringify(data),
+    json: data,
   });
 }
 
 export async function updatePolicy(id, data) {
   return request(`/api/v1/tag-policies/${id}`, {
     method: "PUT",
-    body: JSON.stringify(data),
+    json: data,
   });
 }
 
@@ -36,7 +36,7 @@ export async function deletePolicy(id) {
 export async function previewPolicy(data) {
   return request("/api/v1/tag-policies/preview", {
     method: "POST",
-    body: JSON.stringify(data),
+    json: data,
   });
 }
 
@@ -57,18 +57,15 @@ export async function getComplianceByDimension(dimension) {
 }
 
 export async function listNonCompliant({ limit = 100, offset = 0, sortByCost = true } = {}) {
-  const params = new URLSearchParams({
-    limit: String(limit),
-    offset: String(offset),
-    sort_by_cost: String(sortByCost),
+  return request("/api/v1/compliance/non-compliant", {
+    params: { limit, offset, sort_by_cost: sortByCost },
   });
-  return request(`/api/v1/compliance/non-compliant?${params}`);
 }
 
 export async function getComplianceTrend({ dimension = "overall", dimensionValue, limit = 90 } = {}) {
-  const params = new URLSearchParams({ dimension, limit: String(limit) });
-  if (dimensionValue) params.set("dimension_value", dimensionValue);
-  return request(`/api/v1/compliance/trend?${params}`);
+  return request("/api/v1/compliance/trend", {
+    params: { dimension, limit, dimension_value: dimensionValue || undefined },
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -76,8 +73,7 @@ export async function getComplianceTrend({ dimension = "overall", dimensionValue
 // ---------------------------------------------------------------------------
 
 export async function listCampaigns({ limit = 50, offset = 0 } = {}) {
-  const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
-  return request(`/api/v1/campaigns?${params}`);
+  return request("/api/v1/campaigns", { params: { limit, offset } });
 }
 
 export async function getCampaign(id) {
@@ -87,21 +83,21 @@ export async function getCampaign(id) {
 export async function createCampaign(data) {
   return request("/api/v1/campaigns", {
     method: "POST",
-    body: JSON.stringify(data),
+    json: data,
   });
 }
 
 export async function updateCampaign(id, data) {
   return request(`/api/v1/campaigns/${id}`, {
     method: "PATCH",
-    body: JSON.stringify(data),
+    json: data,
   });
 }
 
 export async function updateResourceStatus(campaignId, resourceId, status) {
   return request(`/api/v1/campaigns/${campaignId}/resources/${resourceId}/status`, {
     method: "PATCH",
-    body: JSON.stringify({ status }),
+    json: { status },
   });
 }
 
@@ -125,7 +121,7 @@ export async function getResourceCommands(campaignId, resourceId) {
 export async function previewTagApply(changes) {
   return request("/api/v1/tags/apply/preview", {
     method: "POST",
-    body: JSON.stringify({ changes }),
+    json: { changes },
   });
 }
 
@@ -138,7 +134,7 @@ export async function previewTagApply(changes) {
 export async function applyTags({ changes, rationale = null, confirmRisky = false }) {
   return request("/api/v1/tags/apply", {
     method: "POST",
-    body: JSON.stringify({ changes, rationale, confirm_risky: confirmRisky }),
+    json: { changes, rationale, confirm_risky: confirmRisky },
   });
 }
 

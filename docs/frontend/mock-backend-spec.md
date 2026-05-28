@@ -91,7 +91,9 @@ surface is deliberately minimal:
 |---|---|
 | `method` | HTTP method; defaults to `GET`. `POST`/`PUT`/`PATCH`/`DELETE` for writes. |
 | `headers` | Merged over the default `Content-Type: application/json` (correctly — see §3.7). |
-| `body` | Request body; the caller stringifies, as today. |
+| `params` | Plain object serialized to a query string and appended to `path`. Rule: drop `null`/`undefined`, keep `""` and `false`, coerce numbers. |
+| `json` | Object `JSON.stringify`-ed into `body` with `Content-Type: application/json`. |
+| `body` | Pre-stringified request body. Prefer `json`; `body` remains for callers that stringify themselves. |
 | `graceful` | When `true`, resolve to `null` on error instead of throwing. |
 
 Behavior: resolve `BASE` from `import.meta.env.VITE_API_URL` once; send

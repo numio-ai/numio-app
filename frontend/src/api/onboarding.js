@@ -35,21 +35,27 @@ export async function getCfnTemplate({
   curPathPrefix = "cur",
   enableTagWrites = false,
 } = {}) {
-  const qs = new URLSearchParams({
-    label: label ?? "",
-    region,
-    cur_mode: curMode,
-    cur_bucket_name: curBucketName,
-    cur_report_name: curReportName,
-    cur_path_prefix: curPathPrefix,
-    enable_tag_writes: enableTagWrites ? "true" : "false",
+  // Empty strings are intentional and must be sent (e.g. cur_bucket_name=);
+  // buildQuery keeps "" and only drops null/undefined.
+  return request("/api/v1/onboarding/cfn-template", {
+    params: {
+      label: label ?? "",
+      region,
+      cur_mode: curMode,
+      cur_bucket_name: curBucketName,
+      cur_report_name: curReportName,
+      cur_path_prefix: curPathPrefix,
+      enable_tag_writes: enableTagWrites ? "true" : "false",
+    },
   });
-  return request(`/api/v1/onboarding/cfn-template?${qs.toString()}`);
 }
 
 /**
  * Return the absolute URL a browser should hit to download the CFN template
  * as a `.yaml` file. Used by the Guided wizard's "Download template" link.
+ *
+ * Exception to the shared `params` option: this builds a browser-facing URL
+ * string, not a request() call, so it constructs the query string directly.
  */
 export function getCfnTemplateDownloadUrl({
   label,
@@ -90,7 +96,7 @@ export async function getOnboardingInProgress() {
 export async function putOnboardingInProgress({ label, step }) {
   return request("/api/v1/onboarding/in-progress", {
     method: "PUT",
-    body: JSON.stringify({ label, step }),
+    json: { label, step },
   });
 }
 
