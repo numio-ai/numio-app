@@ -13,8 +13,7 @@ export async function listJobTypes() {
 
 /** Get recent job-run history. */
 export async function getJobHistory(limit = 20) {
-  const params = new URLSearchParams({ limit: String(limit) });
-  return request(`/api/v1/jobs/history?${params}`);
+  return request("/api/v1/jobs/history", { params: { limit } });
 }
 
 /** Trigger a job on demand (admin only). */

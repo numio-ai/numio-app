@@ -31,7 +31,7 @@ async function request(path, options = {}) {
 export async function runQuery(sql) {
   return request("/api/v1/data-explorer/query", {
     method: "POST",
-    body: JSON.stringify({ sql }),
+    json: { sql },
   });
 }
 
@@ -42,14 +42,14 @@ export async function listSavedQueries() {
 export async function createSavedQuery({ name, sql, description }) {
   return request("/api/v1/data-explorer/queries", {
     method: "POST",
-    body: JSON.stringify({ name, sql, description: description ?? null }),
+    json: { name, sql, description: description ?? null },
   });
 }
 
 export async function updateSavedQuery(id, patch) {
   return request(`/api/v1/data-explorer/queries/${id}`, {
     method: "PUT",
-    body: JSON.stringify(patch),
+    json: patch,
   });
 }
 

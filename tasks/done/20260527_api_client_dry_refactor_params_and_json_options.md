@@ -1,5 +1,5 @@
 ---
-status: backlog
+status: done
 kind: task
 title: API client DRY refactor: params and json options
 ---
@@ -45,3 +45,32 @@ Out of scope:
 - Depends on `switch_dispatch_seam` (the consolidated `frontend/src/api/client.js` must exist).
 - Failures here are silent — a wrong/extra query param does not break the build or throw, it sends a subtly different request. This is why the conversion is per-site audited, not a find/replace.
 - No repeated-key params exist in the codebase as of 2026-05-27 (no `.append`), so a plain `{params}` object can represent every current query.
+
+## Summary
+
+### Steps completed
+1. Added `buildQuery(params)` and `params` / `json` options to the shared `request()` in `frontend/src/api/client.js`. `params`/`json` are resolved before the mock/real branch, so the mock dispatcher (which splits the query off the path and `JSON.parse`s `body`) is unchanged.
+2. Per-site audited and converted all 19 `new URLSearchParams` query sites and all 30 inline `JSON.stringify` body sites across the 8 API modules, preserving exact query-string byte order and conditional-omit semantics.
+3. Added 9 parity unit tests; ran the full suite and a production build.
+
+### Changes made
+- `frontend/src/api/client.js` — new `buildQuery` helper; `request()` accepts `params` (serialization rule: drop null/undefined, keep `""`/`false`, coerce numbers) and `json` (stringify + `Content-Type: application/json`); JSDoc updated.
+- `frontend/src/api/dashboard.js` — 12 query + 5 json sites converted.
+- `frontend/src/api/tagGovernance.js` — 3 query + 8 json.
+- `frontend/src/api/onboarding.js` — 1 query + 1 json converted; `getCfnTemplate` keeps deliberate empty-string params.
+- `frontend/src/api/workspace.js` — 9 json. `chat.js` — 1 query + 2 json. `auth.js` — 2 json. `dataExplorer.js` — 3 json. `jobs.js` — 1 query.
+- `frontend/src/api/client.test.js` — +9 parity tests (unread_only false/true, is_active false/undefined, omitted optional, onboarding empty CUR fields, json byte-identical body, gracefulRequest pass-through, serialization rule).
+- `docs/frontend/mock-backend-spec.md` — §3.1 option table extended with `params` and `json` rows (doc-sync).
+
+### Notable decisions / deviations
+- `getCfnTemplateDownloadUrl` (`onboarding.js`) keeps `new URLSearchParams` — it builds a browser-facing download URL string, not a `request()` call, so it cannot use the option. Documented inline as the one exception (AC#2 allows it).
+- Conditional truthy sites (`if (x) set(...)`) translate to `x || undefined` so empty-string filters drop exactly as before. Optional keys placed last in the params object to preserve URLSearchParams insertion order byte-for-byte.
+- `is_active`/`unread_only` pass through directly: `false` is sent (kept), `undefined` omitted — matches the original `!== undefined` / `if(unread_only)` semantics and AC#3. `null` is dropped per the task's defined serialization rule.
+- Inline `?limit=${...}` sites (`getNonCompliantResources`, `getComplianceByDimension`) were left unchanged — out of scope (not `URLSearchParams`).
+
+### Quality gates
+- `cd frontend && npm test` → 462 passed (453 prior + 9 new).
+- `cd frontend && npm run build` → succeeds.
+
+### Links
+- Worktree branch: `worktree-api_client_dry_refactor` (changes not yet committed/merged).

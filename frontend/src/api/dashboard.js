@@ -12,44 +12,36 @@ const BASE = import.meta.env.VITE_API_URL || "";
 
 /** Total spend for a date range. */
 export async function getTotalCost(startDate, endDate, granularity = "daily", account = null) {
-  const params = new URLSearchParams({
-    start_date: startDate,
-    end_date: endDate,
-    granularity,
+  return request("/api/v1/cost-views/total", {
+    params: { start_date: startDate, end_date: endDate, granularity, account: account || undefined },
   });
-  if (account) params.set("account", account);
-  return request(`/api/v1/cost-views/total?${params}`);
 }
 
 /** Spend over time (daily buckets for trend chart). */
 export async function getCostTimeSeries(startDate, endDate, granularity = "daily", dimension = null, account = null) {
-  const params = new URLSearchParams({
-    start_date: startDate,
-    end_date: endDate,
-    granularity,
+  return request("/api/v1/cost-views/time-series", {
+    params: {
+      start_date: startDate,
+      end_date: endDate,
+      granularity,
+      dimension: dimension || undefined,
+      account: account || undefined,
+    },
   });
-  if (dimension) params.set("dimension", dimension);
-  if (account) params.set("account", account);
-  return request(`/api/v1/cost-views/time-series?${params}`);
 }
 
 /** Spend grouped by business dimension (team, project, etc.). */
 export async function getCostByDimension(dimension, startDate, endDate, account = null) {
-  const params = new URLSearchParams({
-    dimension,
-    start_date: startDate,
-    end_date: endDate,
+  return request("/api/v1/cost-views/by-dimension", {
+    params: { dimension, start_date: startDate, end_date: endDate, account: account || undefined },
   });
-  if (account) params.set("account", account);
-  return request(`/api/v1/cost-views/by-dimension?${params}`);
 }
 
 /** Period-over-period trend analysis by dimension. */
 export async function getTrends(dimension, period = "month", endDate = null, account = null) {
-  const params = new URLSearchParams({ dimension, period });
-  if (endDate) params.set("end_date", endDate);
-  if (account) params.set("account", account);
-  return request(`/api/v1/cost-views/trends?${params}`);
+  return request("/api/v1/cost-views/trends", {
+    params: { dimension, period, end_date: endDate || undefined, account: account || undefined },
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -58,13 +50,9 @@ export async function getTrends(dimension, period = "month", endDate = null, acc
 
 /** Cost breakdown by AWS service (no attribution rules required). */
 export async function getCostByService(accountId, startDate, endDate, granularity = "MONTHLY") {
-  const params = new URLSearchParams({
-    account_id: accountId,
-    start_date: startDate,
-    end_date: endDate,
-    granularity,
+  return request("/api/v1/cost-explorer/cost-by-service", {
+    params: { account_id: accountId, start_date: startDate, end_date: endDate, granularity },
   });
-  return request(`/api/v1/cost-explorer/cost-by-service?${params}`);
 }
 
 // ---------------------------------------------------------------------------
@@ -101,13 +89,15 @@ export async function getActionItemsSummary() {
 
 /** List findings with optional filters. */
 export async function getFindings({ type, severity, status, limit = 100, offset = 0 } = {}) {
-  const params = new URLSearchParams();
-  if (type) params.set("type", type);
-  if (severity) params.set("severity", severity);
-  if (status) params.set("status", status);
-  params.set("limit", String(limit));
-  params.set("offset", String(offset));
-  return request(`/api/v1/findings?${params}`);
+  return request("/api/v1/findings", {
+    params: {
+      type: type || undefined,
+      severity: severity || undefined,
+      status: status || undefined,
+      limit,
+      offset,
+    },
+  });
 }
 
 /** Get finding detail with transition history. */
@@ -129,7 +119,7 @@ export async function resolveFinding(findingId) {
 export async function suppressFinding(findingId, reason) {
   return request(`/api/v1/findings/${findingId}/suppress`, {
     method: "POST",
-    body: JSON.stringify({ reason }),
+    json: { reason },
   });
 }
 
@@ -139,15 +129,17 @@ export async function suppressFinding(findingId, reason) {
 
 /** List cloud resources with optional filters. */
 export async function getResources({ service, account_id, region, state, search, limit = 200, offset = 0 } = {}) {
-  const params = new URLSearchParams();
-  if (service) params.set("service", service);
-  if (account_id) params.set("account_id", account_id);
-  if (region) params.set("region", region);
-  if (state) params.set("state", state);
-  if (search) params.set("search", search);
-  params.set("limit", String(limit));
-  params.set("offset", String(offset));
-  return request(`/api/v1/resources?${params}`);
+  return request("/api/v1/resources", {
+    params: {
+      service: service || undefined,
+      account_id: account_id || undefined,
+      region: region || undefined,
+      state: state || undefined,
+      search: search || undefined,
+      limit,
+      offset,
+    },
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -168,7 +160,7 @@ export async function getBudget(budgetId) {
 export async function createBudget(data) {
   return request("/api/v1/budgets", {
     method: "POST",
-    body: JSON.stringify(data),
+    json: data,
   });
 }
 
@@ -176,7 +168,7 @@ export async function createBudget(data) {
 export async function updateBudget(budgetId, data) {
   return request(`/api/v1/budgets/${budgetId}`, {
     method: "PUT",
-    body: JSON.stringify(data),
+    json: data,
   });
 }
 
@@ -196,12 +188,9 @@ export async function getBudgetAlerts(budgetId) {
 
 /** List infrastructure policies with compliance status. */
 export async function getInfraPolicies({ type, is_active, limit = 100, offset = 0 } = {}) {
-  const params = new URLSearchParams();
-  if (type) params.set("type", type);
-  if (is_active !== undefined) params.set("is_active", String(is_active));
-  params.set("limit", String(limit));
-  params.set("offset", String(offset));
-  return request(`/api/v1/infra-policies?${params}`);
+  return request("/api/v1/infra-policies", {
+    params: { type: type || undefined, is_active, limit, offset },
+  });
 }
 
 /** Get infrastructure policy detail with violations. */
@@ -213,7 +202,7 @@ export async function getInfraPolicy(policyId) {
 export async function createInfraPolicy(data) {
   return request("/api/v1/infra-policies", {
     method: "POST",
-    body: JSON.stringify(data),
+    json: data,
   });
 }
 
@@ -221,7 +210,7 @@ export async function createInfraPolicy(data) {
 export async function updateInfraPolicy(policyId, data) {
   return request(`/api/v1/infra-policies/${policyId}`, {
     method: "PUT",
-    body: JSON.stringify(data),
+    json: data,
   });
 }
 
@@ -236,13 +225,15 @@ export async function deleteInfraPolicy(policyId) {
 
 /** List recommendations with optional filters. */
 export async function getRecommendations({ category, status, sort_by_savings = true, limit = 100, offset = 0 } = {}) {
-  const params = new URLSearchParams();
-  if (category) params.set("category", category);
-  if (status) params.set("status", status);
-  params.set("sort_by_savings", String(sort_by_savings));
-  params.set("limit", String(limit));
-  params.set("offset", String(offset));
-  return request(`/api/v1/recommendations?${params}`);
+  return request("/api/v1/recommendations", {
+    params: {
+      category: category || undefined,
+      status: status || undefined,
+      sort_by_savings,
+      limit,
+      offset,
+    },
+  });
 }
 
 /** Get recommendation detail. */
@@ -281,9 +272,9 @@ export async function getSavingsTimeline() {
 
 /** List notifications with optional unread filter. */
 export async function getNotifications({ unread_only = false, limit = 100, offset = 0 } = {}) {
-  const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
-  if (unread_only) params.set("unread_only", "true");
-  return request(`/api/v1/notifications?${params}`);
+  return request("/api/v1/notifications", {
+    params: { limit, offset, unread_only: unread_only || undefined },
+  });
 }
 
 /** Get unread notification count. */
@@ -312,14 +303,18 @@ export function getNotificationStreamUrl() {
 
 /** List configuration audit events with optional filters. */
 export async function getAuditConfigEvents({ user, action, entity_type, entity_id, start_date, end_date, limit = 100, offset = 0 } = {}) {
-  const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
-  if (user) params.set("user", user);
-  if (action) params.set("action", action);
-  if (entity_type) params.set("entity_type", entity_type);
-  if (entity_id) params.set("entity_id", entity_id);
-  if (start_date) params.set("start_date", start_date);
-  if (end_date) params.set("end_date", end_date);
-  return request(`/api/v1/audit-config-events?${params}`);
+  return request("/api/v1/audit-config-events", {
+    params: {
+      limit,
+      offset,
+      user: user || undefined,
+      action: action || undefined,
+      entity_type: entity_type || undefined,
+      entity_id: entity_id || undefined,
+      start_date: start_date || undefined,
+      end_date: end_date || undefined,
+    },
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -328,13 +323,17 @@ export async function getAuditConfigEvents({ user, action, entity_type, entity_i
 
 /** List action audit events (operations Numio performed against external systems). */
 export async function getAuditActionEvents({ operation_type, actor, status, start_date, end_date, limit = 100, offset = 0 } = {}) {
-  const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
-  if (operation_type) params.set("operation_type", operation_type);
-  if (actor) params.set("actor", actor);
-  if (status) params.set("status", status);
-  if (start_date) params.set("start_date", start_date);
-  if (end_date) params.set("end_date", end_date);
-  return request(`/api/v1/audit-action-events?${params}`);
+  return request("/api/v1/audit-action-events", {
+    params: {
+      limit,
+      offset,
+      operation_type: operation_type || undefined,
+      actor: actor || undefined,
+      status: status || undefined,
+      start_date: start_date || undefined,
+      end_date: end_date || undefined,
+    },
+  });
 }
 
 /** Get one action audit event with its child items. */

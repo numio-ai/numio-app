@@ -7,7 +7,7 @@ import { request } from "./client";
 export async function login(idToken) {
   return request("/api/v1/auth/login", {
     method: "POST",
-    body: JSON.stringify({ id_token: idToken }),
+    json: { id_token: idToken },
   });
 }
 
@@ -25,6 +25,6 @@ export async function getMe() {
 export async function createApiKey(name) {
   return request("/api/v1/auth/api-keys", {
     method: "POST",
-    body: JSON.stringify({ name }),
+    json: { name },
   });
 }

@@ -14,7 +14,7 @@ export async function getWorkspaceSettings() {
 export async function updateWorkspaceSettings(data) {
   return request("/api/v1/workspace/settings", {
     method: "PUT",
-    body: JSON.stringify(data),
+    json: data,
   });
 }
 
@@ -29,14 +29,14 @@ export async function listUsers() {
 export async function inviteUser(email, name, role) {
   return request("/api/v1/users", {
     method: "POST",
-    body: JSON.stringify({ email, name, role }),
+    json: { email, name, role },
   });
 }
 
 export async function updateUser(userId, data) {
   return request(`/api/v1/users/${userId}`, {
     method: "PUT",
-    body: JSON.stringify(data),
+    json: data,
   });
 }
 
@@ -51,7 +51,7 @@ export async function listMyApiKeys() {
 export async function createApiKey(name) {
   return request("/api/v1/users/me/api-keys", {
     method: "POST",
-    body: JSON.stringify({ name }),
+    json: { name },
   });
 }
 
@@ -82,14 +82,14 @@ export async function getAutomationStatus() {
 export async function setGlobalToggle(paused) {
   return request("/api/v1/workspace/automation/global", {
     method: "PUT",
-    body: JSON.stringify({ paused }),
+    json: { paused },
   });
 }
 
 export async function setDomainToggle(domain, paused) {
   return request("/api/v1/workspace/automation/domain", {
     method: "PUT",
-    body: JSON.stringify({ domain, paused }),
+    json: { domain, paused },
   });
 }
 
@@ -112,14 +112,14 @@ export async function listAccounts() {
 export async function registerAccount(data) {
   return request("/api/v1/accounts", {
     method: "POST",
-    body: JSON.stringify(data),
+    json: data,
   });
 }
 
 export async function updateAccount(accountId, data) {
   return request(`/api/v1/accounts/${accountId}`, {
     method: "PUT",
-    body: JSON.stringify(data),
+    json: data,
   });
 }
 
@@ -152,6 +152,6 @@ export async function getNotificationPreferences() {
 export async function updateNotificationPreferences(preferences) {
   return request("/api/v1/notifications/preferences", {
     method: "PUT",
-    body: JSON.stringify({ preferences }),
+    json: { preferences },
   });
 }
