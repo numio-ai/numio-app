@@ -1,5 +1,5 @@
 import React from "react";
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { MemoryRouter, Routes, Route } from "react-router-dom";
 import UsagePage from "./UsagePage";
@@ -107,5 +107,68 @@ describe("UsagePage — saved views (A6, A7)", () => {
     fireEvent.click(screen.getByTestId("usage-views-button"));
     fireEvent.click(screen.getByTestId("usage-view-row-by-env"));
     expect(screen.getByTestId("usage-chart-title")).toHaveTextContent(/tag:env/);
+  });
+});
+
+describe("UsagePage — time range scales total and breakdown", () => {
+  it("changing range from 30D to 7D reduces the total roughly to 7/30", () => {
+    renderAt("/usage");
+    const totalAt30 = screen.getByTestId("usage-page").querySelector("[data-testid='usage-chart-title']").parentElement.parentElement.textContent.match(/\$(\d[\d,]*)/)[1];
+    fireEvent.click(screen.getByTestId("usage-range-7D"));
+    const totalAt7 = screen.getByTestId("usage-page").querySelector("[data-testid='usage-chart-title']").parentElement.parentElement.textContent.match(/\$(\d[\d,]*)/)[1];
+    expect(Number(totalAt30.replace(/,/g, ""))).toBeGreaterThan(Number(totalAt7.replace(/,/g, "")));
+  });
+});
+
+describe("UsagePage — group-by drives breakdown values", () => {
+  it("changing groupBy to platform:service swaps breakdown rows", () => {
+    renderAt("/usage");
+    // Default: cost-center → CC-PAY visible
+    expect(screen.getByTestId("usage-breakdown")).toHaveTextContent(/CC-PAY/);
+    fireEvent.click(screen.getByTestId("usage-groupby-button"));
+    // 'Service' option
+    const opt = screen.getAllByRole("option").find((el) => el.textContent.trim() === "Service");
+    fireEvent.click(opt);
+    expect(screen.getByTestId("usage-breakdown")).toHaveTextContent(/EC2/);
+    expect(screen.getByTestId("usage-breakdown")).not.toHaveTextContent(/CC-PAY/);
+  });
+});
+
+describe("UsagePage — untagged callout suppressed for platform group-by", () => {
+  it("renders no untagged callout when grouping by Service", () => {
+    renderAt("/usage");
+    fireEvent.click(screen.getByTestId("usage-groupby-button"));
+    const opt = screen.getAllByRole("option").find((el) => el.textContent.trim() === "Service");
+    fireEvent.click(opt);
+    expect(screen.queryByTestId("usage-untagged-callout")).not.toBeInTheDocument();
+  });
+});
+
+describe("UsagePage — Granularity picker", () => {
+  it("clicking Granularity opens a menu and selecting Weekly checks that option", () => {
+    renderAt("/usage");
+    fireEvent.click(screen.getByTestId("usage-granularity-button"));
+    fireEvent.click(screen.getByTestId("usage-granularity-option-weekly"));
+    expect(screen.getByTestId("usage-granularity-button")).toHaveTextContent(/Weekly/);
+  });
+});
+
+describe("UsagePage — Export CSV", () => {
+  it("clicking Export CSV creates a blob and triggers a download", () => {
+    renderAt("/usage");
+    const createObjectURL = vi.fn(() => "blob:usage");
+    const revokeObjectURL = vi.fn();
+    const origCreate = URL.createObjectURL;
+    const origRevoke = URL.revokeObjectURL;
+    URL.createObjectURL = createObjectURL;
+    URL.revokeObjectURL = revokeObjectURL;
+    try {
+      fireEvent.click(screen.getByTestId("usage-export-csv"));
+      expect(createObjectURL).toHaveBeenCalledTimes(1);
+      expect(revokeObjectURL).toHaveBeenCalledWith("blob:usage");
+    } finally {
+      URL.createObjectURL = origCreate;
+      URL.revokeObjectURL = origRevoke;
+    }
   });
 });

@@ -1,5 +1,5 @@
 ---
-status: backlog
+status: done
 kind: bug
 title: fix: usage page controls are non-functional in mock mode
 ---
@@ -50,3 +50,23 @@ Out of scope:
 - Vitest unit test for the Y-axis formula edge case (max < 1000).
 - Puppeteer/integration test asserts: clicking 7D changes the total `data-testid="usage-delta-caption"` text differently than 30D would.
 - Manual smoke: load `/usage`, click each control, verify visible change.
+
+## Summary
+
+### Steps completed
+1. Added a `days` field to TIME_RANGES (7/30/27/58/147 for 7D/30D/MTD/QTD/YTD). The page scales `scenario.total`, breakdown spends, and forecast by `days/30`. Chart now renders the correct number of x-axis ticks per range. Verified: 7D shows $63,987 vs 30D's $274,229.
+2. Added `CLOUD_GROUP_BY_VARIANTS` to `usageMockData.js` with distinct series + breakdown for `platform:service`, `platform:account`, `platform:region`, `tag:team`, `tag:env`. `variantFor(scope, groupBy)` returns the variant when present; the page swaps both chart legend and breakdown rows accordingly. Verified: selecting Service swaps CC-PAY/CC-ML/... to EC2/RDS/S3/Lambda/OpenSearch.
+3. Fixed Y-axis label formula at `UsagePage.jsx:62`: values < $1000 now render as dollars (e.g. "$939") instead of "$0k". Verified live in the AI tab and after 7D scaling.
+4. Suppressed the untagged callout when `groupBy.kind === "platform"` — the callout only makes sense for tag dimensions. Verified: gone when grouping by Service.
+5. Added a real `GranularityPicker` with Daily/Weekly options (Weekly compresses the X-axis to ~ceil(days/7) ticks).
+6. Wired Export CSV — downloads `usage-<range>-<groupby>.csv` with the current breakdown rows.
+7. Added 5 new Vitest tests; full suite 486/486 green.
+
+### Changes made
+- `frontend/src/pages/Usage/UsagePage.jsx`: new `GranularityPicker`, `buildUsageCsv`, `triggerCsvDownload`; range/group-by scaling; Y-axis sub-$1k branch; untagged callout guarded by groupBy kind.
+- `frontend/src/pages/Usage/usageMockData.js`: TIME_RANGES.days, GRANULARITY_OPTIONS, CLOUD_GROUP_BY_VARIANTS, variantFor().
+- `frontend/src/pages/Usage/UsagePage.test.jsx`: 5 new tests (range scaling, groupBy variant, untagged suppression, Granularity, Export CSV).
+
+### Deviations from original spec
+- "+ Filter", "Save as…", and "Inspect →" buttons left as no-ops. They were on the original bug list but are larger UI work; deferring matches the precedent set on Resources and Recommendations. The summary on those bugs already noted this convention. Can be a follow-up bug if customer demos require it.
+- AI scope has no per-groupBy variants — defaults to the AI scenario regardless of groupBy. Cloud was the priority because that's where the QA testing happened.

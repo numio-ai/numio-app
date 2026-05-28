@@ -7,8 +7,10 @@ import {
   PLATFORM_DIMS,
   SERIES_COLORS,
   UNTAGGED_COLOR,
+  GRANULARITY_OPTIONS,
   getScenario,
   getSavedViews,
+  variantFor,
 } from "./usageMockData";
 
 const card = { background: "#fff", border: "1px solid #e5e5e5", borderRadius: 12, padding: "20px 24px" };
@@ -54,11 +56,13 @@ function StackedAreaChart({ series, days = 30, height = 280 }) {
     <svg width="100%" height={h} viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" style={{ display: "block" }} role="img" aria-label="Spend over time">
       {[0.25, 0.5, 0.75, 1].map((p, i) => {
         const y = pt + p * innerH;
+        const v = max * (1 - p);
+        const label = v >= 1000 ? `$${Math.round(v / 1000)}k` : `$${Math.round(v)}`;
         return (
           <g key={i}>
             <line x1={pl} x2={pl + innerW} y1={y} y2={y} stroke="#f3f4f6" />
             <text x={pl - 6} y={y + 3} fontSize={10} fill="#9ca3af" textAnchor="end">
-              ${Math.round((max * (1 - p)) / 1000)}k
+              {label}
             </text>
           </g>
         );
@@ -405,20 +409,113 @@ function UsageBreakdown({ groupBy, rows, scope, periodLabel }) {
   );
 }
 
+function buildUsageCsv(rows, groupBy) {
+  const dimColLabel = groupBy?.kind === "tag" ? `tag:${groupBy.key}` : groupBy?.key || "dimension";
+  const headers = [dimColLabel, "team", "spend", "share", "trend"];
+  const escape = (v) => {
+    const s = v == null ? "" : String(v);
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+  const lines = [headers.join(",")];
+  for (const r of rows) {
+    lines.push([r.name, r.team || "", r.spend, `${r.share}%`, r.trend].map(escape).join(","));
+  }
+  return lines.join("\n");
+}
+
+function triggerCsvDownload(filename, content) {
+  const blob = new Blob([content], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function GranularityPicker({ value, onChange }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  useEffect(() => {
+    if (!open) return;
+    const onClick = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener("mousedown", onClick);
+    return () => document.removeEventListener("mousedown", onClick);
+  }, [open]);
+  const active = GRANULARITY_OPTIONS.find((o) => o.id === value) || GRANULARITY_OPTIONS[0];
+  return (
+    <span ref={ref} style={{ position: "relative", display: "inline-block" }}>
+      <button
+        type="button"
+        data-testid="usage-granularity-button"
+        onClick={() => setOpen((v) => !v)}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "5px 10px", fontSize: 12, background: "#fff", border: "1px solid #e5e5e5", borderRadius: 6, cursor: "pointer" }}
+      >
+        <span style={{ color: "#9ca3af" }}>Granularity:</span>
+        <span style={{ color: "#111827", fontWeight: 500 }}>{active.label}</span>
+        <span style={{ color: "#9ca3af" }}>▾</span>
+      </button>
+      {open && (
+        <div role="listbox" style={{ position: "absolute", top: "calc(100% + 6px)", left: 0, minWidth: 140, background: "#fff", border: "1px solid #e5e5e5", borderRadius: 8, boxShadow: "0 10px 30px rgba(0,0,0,0.08)", padding: 4, zIndex: 50 }}>
+          {GRANULARITY_OPTIONS.map((o) => {
+            const on = o.id === value;
+            return (
+              <div
+                key={o.id}
+                role="option"
+                aria-selected={on}
+                tabIndex={0}
+                data-testid={`usage-granularity-option-${o.id}`}
+                onClick={() => { onChange(o.id); setOpen(false); }}
+                onKeyDown={(e) => { if (e.key === "Enter") { onChange(o.id); setOpen(false); } }}
+                style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 10px", borderRadius: 4, fontSize: 13, color: "#111827", cursor: "pointer", background: on ? "#f3f4f6" : "transparent" }}
+              >
+                <span style={{ width: 14, textAlign: "center" }}>{on ? "✓" : ""}</span>
+                <span>{o.label}</span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </span>
+  );
+}
+
 export default function UsagePage() {
   const url = useUsageUrlState({
     groupBy: defaultGroupByFor,
     view: defaultViewFor,
   });
   const { scope, range: rangeId, groupBy, filters, view: viewId } = url;
+  const [granularity, setGranularity] = useState("daily");
 
-  const scenario = getScenario(scope);
+  const baseScenario = getScenario(scope);
+  const variant = variantFor(scope, groupBy);
+  const series = variant?.series || baseScenario.series;
+  const breakdown = variant?.breakdown || baseScenario.breakdown;
   const savedViews = getSavedViews(scope);
   const activeRange = TIME_RANGES.find((r) => r.id === rangeId) || TIME_RANGES[1];
-  const total = scenario.total;
-  const delta = scenario.delta;
+  const rangeFactor = activeRange.days / 30;
+
+  const scaledBreakdown = useMemo(
+    () => breakdown.map((r) => ({ ...r, spend: Math.round(r.spend * rangeFactor) })),
+    [breakdown, rangeFactor]
+  );
+  const total = Math.round(baseScenario.total * rangeFactor);
+  const delta = baseScenario.delta;
   const deltaUp = delta > 0;
-  const untaggedRow = scenario.breakdown.find((r) => r.untagged);
+  const untaggedRow = groupBy?.kind === "tag" ? scaledBreakdown.find((r) => r.untagged) : null;
+  const forecast = baseScenario.forecast
+    ? { ...baseScenario.forecast, value: Math.round(baseScenario.forecast.value * rangeFactor) }
+    : null;
+
+  const chartDays = granularity === "weekly"
+    ? Math.max(2, Math.ceil(activeRange.days / 7))
+    : activeRange.days;
 
   const handleCopyLink = (preset) => {
     const url = new URL(window.location.href);
@@ -434,8 +531,14 @@ export default function UsagePage() {
     url.setFilters(filters.filter((f) => !(f.kind === filter.kind && f.key === filter.key)));
   };
 
-  const cloudTotal = scope === "cloud" ? scenario.total : 274_229;
-  const aiTotal = scope === "ai" ? scenario.total : 8_900;
+  const handleExportCsv = () => {
+    const csv = buildUsageCsv(scaledBreakdown, groupBy);
+    const gbKey = groupBy?.kind === "tag" ? `tag-${groupBy.key}` : groupBy?.key || "default";
+    triggerCsvDownload(`usage-${rangeId}-${gbKey}.csv`, csv);
+  };
+
+  const cloudTotal = scope === "cloud" ? total : 274_229;
+  const aiTotal = scope === "ai" ? total : 8_900;
 
   return (
     <div
@@ -523,18 +626,19 @@ export default function UsagePage() {
           Save as…
         </button>
         <span style={{ flex: 1 }} />
-        <button type="button" style={{ padding: "5px 10px", fontSize: 12, color: "#374151", background: "#fff", border: "1px solid #e5e5e5", borderRadius: 6, cursor: "pointer" }}>
+        <button
+          type="button"
+          data-testid="usage-export-csv"
+          onClick={handleExportCsv}
+          style={{ padding: "5px 10px", fontSize: 12, color: "#374151", background: "#fff", border: "1px solid #e5e5e5", borderRadius: 6, cursor: "pointer" }}
+        >
           Export CSV
         </button>
       </div>
 
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
         <GroupByPicker groupBy={groupBy} onChange={(g) => url.setGroupBy(g)} />
-        <span style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "5px 10px", fontSize: 12, background: "#fff", border: "1px solid #e5e5e5", borderRadius: 6 }}>
-          <span style={{ color: "#9ca3af" }}>Granularity:</span>
-          <span style={{ color: "#111827", fontWeight: 500 }}>Daily</span>
-          <span style={{ color: "#9ca3af" }}>▾</span>
-        </span>
+        <GranularityPicker value={granularity} onChange={setGranularity} />
         <span style={{ flex: 1 }} />
       </div>
 
@@ -573,21 +677,21 @@ export default function UsagePage() {
             </div>
           </div>
           <div style={{ textAlign: "right", display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
-            {scenario.forecast && (
+            {forecast && (
               <span style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "4px 10px", fontSize: 12, background: "#f0fdf4", color: "#15803d", border: "1px solid #bbf7d0", borderRadius: 999 }}>
                 <span style={{ width: 6, height: 6, borderRadius: 3, background: "#16a34a" }} />
-                Forecast EOM <b style={{ fontWeight: 600 }}>${(scenario.forecast.value / 1000).toFixed(1)}k</b>
-                <span style={{ color: "#15803d", opacity: 0.7 }}>vs ${(scenario.forecast.budget / 1000).toFixed(0)}k budget · {scenario.forecast.status}</span>
+                Forecast EOM <b style={{ fontWeight: 600 }}>${(forecast.value / 1000).toFixed(1)}k</b>
+                <span style={{ color: "#15803d", opacity: 0.7 }}>vs ${(forecast.budget / 1000).toFixed(0)}k budget · {forecast.status}</span>
               </span>
             )}
             <span style={{ fontSize: 11, color: "#9ca3af" }}>CUR · synced 2h ago</span>
           </div>
         </div>
 
-        <StackedAreaChart series={scenario.series} />
+        <StackedAreaChart series={series} days={chartDays} />
 
         <div style={{ display: "flex", flexWrap: "wrap", gap: 16, marginTop: 8 }}>
-          {scenario.series.map((s) => (
+          {series.map((s) => (
             <span key={s.name} style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
               <span style={{ width: 10, height: 10, borderRadius: 2, background: s.color, opacity: s.untagged ? 0.55 : 1, border: s.untagged ? `1px dashed ${UNTAGGED_COLOR}` : "none" }} />
               <span style={{
@@ -602,8 +706,8 @@ export default function UsagePage() {
       </div>
 
       <UsageBreakdown
-        groupBy={groupBy || scenario.defaultGroupBy}
-        rows={scenario.breakdown}
+        groupBy={groupBy || baseScenario.defaultGroupBy}
+        rows={scaledBreakdown}
         scope={scope}
         periodLabel={activeRange.period}
       />
