@@ -170,3 +170,72 @@ describe("ResourcesPage — saved views (A7, A8)", () => {
     expect(screen.getByTestId("resources-density-comfortable")).toHaveAttribute("aria-selected", "true");
   });
 });
+
+describe("ResourcesPage — row click opens detail panel", () => {
+  it("clicking a row name opens the side panel with that resource", () => {
+    renderAt("/resources");
+    expect(screen.queryByTestId("resources-detail-panel")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTestId("resources-row-open-i-0a4f8c2d09b3e7a11"));
+    const panel = screen.getByTestId("resources-detail-panel");
+    expect(panel).toHaveTextContent(/payments-api-prod-3/);
+    expect(panel).toHaveTextContent(/EC2/);
+  });
+
+  it("clicking the close button dismisses the panel", () => {
+    renderAt("/resources");
+    fireEvent.click(screen.getByTestId("resources-row-open-i-0a4f8c2d09b3e7a11"));
+    fireEvent.click(screen.getByTestId("resources-detail-close"));
+    expect(screen.queryByTestId("resources-detail-panel")).not.toBeInTheDocument();
+  });
+});
+
+describe("ResourcesPage — per-row ⋯ menu", () => {
+  it("clicking ⋯ opens an action menu with Copy ID and View details", () => {
+    renderAt("/resources");
+    const id = "i-0a4f8c2d09b3e7a11";
+    fireEvent.click(screen.getByTestId(`resources-row-menu-button-${id}`));
+    const menu = screen.getByTestId(`resources-row-menu-${id}`);
+    expect(within(menu).getByTestId(`resources-row-menu-copy-id-${id}`)).toBeInTheDocument();
+    expect(within(menu).getByTestId(`resources-row-menu-view-${id}`)).toBeInTheDocument();
+  });
+
+  it("View details from the ⋯ menu opens the detail panel", () => {
+    renderAt("/resources");
+    const id = "i-0a4f8c2d09b3e7a11";
+    fireEvent.click(screen.getByTestId(`resources-row-menu-button-${id}`));
+    fireEvent.click(screen.getByTestId(`resources-row-menu-view-${id}`));
+    expect(screen.getByTestId("resources-detail-panel")).toHaveTextContent(/payments-api-prod-3/);
+  });
+});
+
+describe("ResourcesPage — Export CSV", () => {
+  it("clicking Export CSV triggers a download (anchor click with a CSV blob href)", () => {
+    renderAt("/resources");
+    // Spy on URL.createObjectURL and anchor.click
+    const createObjectURL = vi.fn(() => "blob:mock");
+    const revokeObjectURL = vi.fn();
+    const origCreate = URL.createObjectURL;
+    const origRevoke = URL.revokeObjectURL;
+    URL.createObjectURL = createObjectURL;
+    URL.revokeObjectURL = revokeObjectURL;
+    try {
+      fireEvent.click(screen.getByTestId("resources-export-csv"));
+      expect(createObjectURL).toHaveBeenCalledTimes(1);
+      expect(revokeObjectURL).toHaveBeenCalledWith("blob:mock");
+    } finally {
+      URL.createObjectURL = origCreate;
+      URL.revokeObjectURL = origRevoke;
+    }
+  });
+});
+
+describe("ResourcesPage — Share link", () => {
+  it("clicking Share link writes the current URL to the clipboard", () => {
+    renderAt("/resources");
+    const writeText = vi.fn();
+    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+    fireEvent.click(screen.getByTestId("resources-share-link"));
+    expect(writeText).toHaveBeenCalledTimes(1);
+    expect(writeText.mock.calls[0][0]).toBe(window.location.href);
+  });
+});

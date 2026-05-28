@@ -262,6 +262,123 @@ function ColumnsPicker({ activeCols, onToggle }) {
   );
 }
 
+function buildResourcesCsv(rows, cols) {
+  const headers = ["id", "name", ...cols.map((c) => c.id).filter((id) => id !== "name")];
+  const escape = (v) => {
+    const s = v == null ? "" : String(v);
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+  const lines = [headers.join(",")];
+  for (const r of rows) {
+    const cells = headers.map((h) => {
+      if (h === "id") return r.id;
+      if (h === "name") return r.name;
+      if (h.startsWith("tag:")) return r.tags?.[h.slice(4)] ?? "";
+      return r[h] ?? "";
+    });
+    lines.push(cells.map(escape).join(","));
+  }
+  return lines.join("\n");
+}
+
+function triggerDownload(filename, content, mime = "text/csv") {
+  const blob = new Blob([content], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function ResourceDetailPanel({ resource, onClose }) {
+  if (!resource) return null;
+  return (
+    <div
+      data-testid="resources-detail-panel"
+      role="dialog"
+      aria-label="Resource details"
+      style={{
+        position: "fixed", top: 0, right: 0, bottom: 0, width: 420, zIndex: 80,
+        background: "#fff", borderLeft: "1px solid #e5e5e5", boxShadow: "-10px 0 30px rgba(0,0,0,0.08)",
+        padding: "20px 24px", overflowY: "auto", fontFamily: "Inter, system-ui, sans-serif",
+      }}
+    >
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14 }}>
+        <div style={{ minWidth: 0 }}>
+          <p style={{ fontSize: 10, fontWeight: 500, color: "#9ca3af", textTransform: "uppercase", letterSpacing: "0.06em", margin: 0 }}>Resource</p>
+          <h2 style={{ fontSize: 16, fontWeight: 600, color: "#111827", margin: "4px 0 0", wordBreak: "break-word" }}>{resource.name || resource.id}</h2>
+          <p style={{ fontSize: 11, color: "#9ca3af", fontFamily: "JetBrains Mono, monospace", margin: "2px 0 0", wordBreak: "break-all" }}>{resource.id}</p>
+        </div>
+        <button
+          type="button"
+          data-testid="resources-detail-close"
+          onClick={onClose}
+          aria-label="Close detail panel"
+          style={{ width: 26, height: 26, padding: 0, background: "transparent", border: "none", color: "#6b7280", fontSize: 18, lineHeight: 1, cursor: "pointer" }}
+        >
+          ×
+        </button>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, fontSize: 12, color: "#111827", marginBottom: 16 }}>
+        <div><div style={{ color: "#9ca3af", fontSize: 10, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 3 }}>Service</div>{resource.svc}</div>
+        <div><div style={{ color: "#9ca3af", fontSize: 10, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 3 }}>Type</div>{resource.type}</div>
+        <div><div style={{ color: "#9ca3af", fontSize: 10, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 3 }}>Region</div>{resource.region}</div>
+        <div><div style={{ color: "#9ca3af", fontSize: 10, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 3 }}>Account</div>···{resource.acct?.slice(-4)}</div>
+        <div><div style={{ color: "#9ca3af", fontSize: 10, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 3 }}>State</div><StateCell state={resource.state} /></div>
+        <div><div style={{ color: "#9ca3af", fontSize: 10, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 3 }}>Spend/mo</div>${resource.spend?.toLocaleString()}</div>
+      </div>
+
+      <div style={{ marginBottom: 8, fontSize: 10, fontWeight: 500, color: "#9ca3af", textTransform: "uppercase", letterSpacing: "0.05em" }}>Tags</div>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 16 }}>
+        {Object.keys(resource.tags || {}).length === 0 && <span style={{ fontSize: 12, color: "#9ca3af" }}>No tags</span>}
+        {Object.entries(resource.tags || {}).map(([k, v]) => (
+          <span key={k} data-testid={`resources-detail-tag-${k}`} style={{ fontSize: 11, color: "#374151", background: "#f3f4f6", padding: "2px 8px", borderRadius: 4, fontFamily: "JetBrains Mono, monospace" }}>
+            {k}={v}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function RowActionMenu({ resource, onCopyId, onViewDetails, onClose }) {
+  const ref = useRef(null);
+  useOutsideClick(ref, onClose, true);
+  return (
+    <div
+      ref={ref}
+      data-testid={`resources-row-menu-${resource.id}`}
+      role="menu"
+      style={{
+        position: "absolute", top: 22, right: 0, minWidth: 160,
+        background: "#fff", border: "1px solid #e5e5e5", borderRadius: 8,
+        boxShadow: "0 10px 30px rgba(0,0,0,0.08)", padding: 4, zIndex: 60,
+      }}
+    >
+      <button
+        type="button"
+        data-testid={`resources-row-menu-copy-id-${resource.id}`}
+        onClick={() => { onCopyId(resource); onClose(); }}
+        style={{ display: "block", width: "100%", textAlign: "left", padding: "6px 10px", fontSize: 12, color: "#111827", background: "transparent", border: "none", borderRadius: 4, cursor: "pointer" }}
+      >
+        Copy ID
+      </button>
+      <button
+        type="button"
+        data-testid={`resources-row-menu-view-${resource.id}`}
+        onClick={() => { onViewDetails(resource); onClose(); }}
+        style={{ display: "block", width: "100%", textAlign: "left", padding: "6px 10px", fontSize: 12, color: "#111827", background: "transparent", border: "none", borderRadius: 4, cursor: "pointer" }}
+      >
+        View details
+      </button>
+    </div>
+  );
+}
+
 export default function ResourcesPage() {
   const [params, setParams] = useSearchParams();
   const viewId = params.get("view") || "all";
@@ -277,6 +394,8 @@ export default function ResourcesPage() {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [showBackToTop, setShowBackToTop] = useState(false);
+  const [detailResource, setDetailResource] = useState(null);
+  const [menuOpenFor, setMenuOpenFor] = useState(null);
   const sentinelRef = useRef(null);
   const scrollerRef = useRef(null);
 
@@ -351,6 +470,27 @@ export default function ResourcesPage() {
   const toggleRow = (id) => setSelected((s) => ({ ...s, [id]: !s[id] }));
   const clearSelection = () => setSelected({});
 
+  const handleShareLink = useCallback(() => {
+    try {
+      navigator.clipboard?.writeText(window.location.href);
+    } catch {
+      // clipboard unavailable; silent
+    }
+  }, []);
+
+  const handleExportCsv = useCallback(() => {
+    const csv = buildResourcesCsv(visibleResources, cols);
+    triggerDownload(`resources-${viewId}.csv`, csv);
+  }, [visibleResources, cols, viewId]);
+
+  const handleCopyId = useCallback((r) => {
+    try {
+      navigator.clipboard?.writeText(r.id);
+    } catch {
+      // silent
+    }
+  }, []);
+
   return (
     <div
       ref={scrollerRef}
@@ -371,14 +511,24 @@ export default function ResourcesPage() {
 
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
         <ViewsPicker activeId={viewId} onSelect={setView} />
-        <button type="button" style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "5px 10px", fontSize: 12, color: "#374151", background: "#fff", border: "1px solid #e5e5e5", borderRadius: 6, cursor: "pointer" }}>
+        <button
+          type="button"
+          data-testid="resources-share-link"
+          onClick={handleShareLink}
+          style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "5px 10px", fontSize: 12, color: "#374151", background: "#fff", border: "1px solid #e5e5e5", borderRadius: 6, cursor: "pointer" }}
+        >
           🔗 Share link
         </button>
         <button type="button" style={{ padding: "5px 10px", fontSize: 12, color: "#6b7280", background: "#fff", border: "1px solid #e5e5e5", borderRadius: 6, cursor: "pointer" }}>
           Save as…
         </button>
         <span style={{ flex: 1 }} />
-        <button type="button" style={{ padding: "5px 10px", fontSize: 12, color: "#374151", background: "#fff", border: "1px solid #e5e5e5", borderRadius: 6, cursor: "pointer" }}>
+        <button
+          type="button"
+          data-testid="resources-export-csv"
+          onClick={handleExportCsv}
+          style={{ padding: "5px 10px", fontSize: 12, color: "#374151", background: "#fff", border: "1px solid #e5e5e5", borderRadius: 6, cursor: "pointer" }}
+        >
           Export CSV
         </button>
       </div>
@@ -526,6 +676,11 @@ export default function ResourcesPage() {
               {cols.map((c) => (
                 <div
                   key={c.id}
+                  data-testid={c.id === "name" ? `resources-row-open-${r.id}` : undefined}
+                  onClick={c.id === "name" ? () => setDetailResource(r) : undefined}
+                  role={c.id === "name" ? "button" : undefined}
+                  tabIndex={c.id === "name" ? 0 : undefined}
+                  onKeyDown={c.id === "name" ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setDetailResource(r); } } : undefined}
                   style={{
                     fontSize: 12, color: "#111827",
                     textAlign: c.align === "right" ? "right" : c.align === "center" ? "center" : "left",
@@ -533,18 +688,33 @@ export default function ResourcesPage() {
                     display: c.align === "center" ? "flex" : "block",
                     justifyContent: c.align === "center" ? "center" : undefined,
                     whiteSpace: "nowrap", overflow: "hidden",
+                    cursor: c.id === "name" ? "pointer" : undefined,
                   }}
                 >
                   {renderCell(r, c)}
                 </div>
               ))}
-              <button
-                type="button"
-                aria-label="Row actions"
-                style={{ width: 22, height: 22, padding: 0, background: "transparent", border: "none", borderRadius: 4, color: "#9ca3af", fontSize: 14, lineHeight: 1, cursor: "pointer" }}
-              >
-                ⋯
-              </button>
+              <div style={{ position: "relative" }}>
+                <button
+                  type="button"
+                  data-testid={`resources-row-menu-button-${r.id}`}
+                  aria-label="Row actions"
+                  aria-haspopup="menu"
+                  aria-expanded={menuOpenFor === r.id}
+                  onClick={() => setMenuOpenFor((cur) => (cur === r.id ? null : r.id))}
+                  style={{ width: 22, height: 22, padding: 0, background: "transparent", border: "none", borderRadius: 4, color: "#9ca3af", fontSize: 14, lineHeight: 1, cursor: "pointer" }}
+                >
+                  ⋯
+                </button>
+                {menuOpenFor === r.id && (
+                  <RowActionMenu
+                    resource={r}
+                    onCopyId={handleCopyId}
+                    onViewDetails={(res) => setDetailResource(res)}
+                    onClose={() => setMenuOpenFor(null)}
+                  />
+                )}
+              </div>
             </div>
           );
         })}
@@ -585,6 +755,8 @@ export default function ResourcesPage() {
           </button>
         )}
       </div>
+
+      <ResourceDetailPanel resource={detailResource} onClose={() => setDetailResource(null)} />
     </div>
   );
 }
