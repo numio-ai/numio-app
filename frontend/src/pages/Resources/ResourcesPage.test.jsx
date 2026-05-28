@@ -300,3 +300,20 @@ describe("ResourcesPage — Manage all views", () => {
     expect(screen.queryByTestId("resources-manage-views-dialog")).not.toBeInTheDocument();
   });
 });
+
+describe("ResourcesPage — detail panel close mechanisms", () => {
+  it("clicking the backdrop closes the panel", () => {
+    renderAt("/resources");
+    fireEvent.click(screen.getByTestId("resources-row-open-i-0a4f8c2d09b3e7a11"));
+    expect(screen.getByTestId("resources-detail-panel")).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId("resources-detail-backdrop"));
+    expect(screen.queryByTestId("resources-detail-panel")).not.toBeInTheDocument();
+  });
+
+  it("pressing Escape closes the panel", () => {
+    renderAt("/resources");
+    fireEvent.click(screen.getByTestId("resources-row-open-i-0a4f8c2d09b3e7a11"));
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.queryByTestId("resources-detail-panel")).not.toBeInTheDocument();
+  });
+});

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import useUsageUrlState from "../../hooks/useUsageUrlState";
 import {
   TIME_RANGES,
@@ -352,7 +352,7 @@ function UntaggedCallout({ untaggedRow, dimKey }) {
   );
 }
 
-function UsageBreakdown({ groupBy, rows, scope, periodLabel }) {
+function UsageBreakdown({ groupBy, rows, scope, periodLabel, onInspect }) {
   const isTag = groupBy.kind === "tag";
   const dimColLabel = isTag ? `tag:${groupBy.key}` : groupBy.key;
   return (
@@ -401,7 +401,14 @@ function UsageBreakdown({ groupBy, rows, scope, periodLabel }) {
           <span style={{ fontSize: 12, color: "#6b7280", textAlign: "right" }}>{r.share}%</span>
           <span style={{ fontSize: 12, color: r.up ? "#d97706" : "#16a34a", textAlign: "right" }}>{r.trend}</span>
           <span style={{ textAlign: "right" }}>
-            <button type="button" style={{ fontSize: 11, color: "#3B5BDB", background: "none", border: "1px solid #d1d5db", borderRadius: 6, padding: "3px 10px", cursor: "pointer" }}>Inspect →</button>
+            <button
+              type="button"
+              data-testid={`usage-breakdown-inspect-${r.name}`}
+              onClick={() => onInspect?.(r)}
+              style={{ fontSize: 11, color: "#3B5BDB", background: "none", border: "1px solid #d1d5db", borderRadius: 6, padding: "3px 10px", cursor: "pointer" }}
+            >
+              Inspect →
+            </button>
           </span>
         </div>
       ))}
@@ -492,6 +499,19 @@ export default function UsagePage() {
   });
   const { scope, range: rangeId, groupBy, filters, view: viewId } = url;
   const [granularity, setGranularity] = useState("daily");
+  const navigate = useNavigate();
+
+  const handleInspect = (row) => {
+    // Drill from a usage breakdown row to the matching resources view.
+    const params = new URLSearchParams();
+    if (groupBy?.kind === "tag" && groupBy.key === "cost-center") {
+      params.set("view", "no-cc"); // closest preset that filters by cost-center
+    } else {
+      params.set("view", "all");
+    }
+    params.set("filter", `${groupBy?.kind || "platform"}:${groupBy?.key || "service"}=${row.name}`);
+    navigate(`/resources?${params.toString()}`);
+  };
 
   const baseScenario = getScenario(scope);
   const variant = variantFor(scope, groupBy);
@@ -710,6 +730,7 @@ export default function UsagePage() {
         rows={scaledBreakdown}
         scope={scope}
         periodLabel={activeRange.period}
+        onInspect={handleInspect}
       />
     </div>
   );

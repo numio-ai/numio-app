@@ -135,3 +135,16 @@ describe("PoliciesPage — subtitle signals", () => {
     expect(subtitle).toHaveTextContent(/open violations/);
   });
 });
+
+describe("PoliciesPage — row menu actions", () => {
+  it("Open editor shows a 'coming soon' toast (no silent failure)", async () => {
+    const { container } = renderAt("/policies");
+    // Open the first row's ⋯ menu — the test file already gave it a testid pattern of policy-row-menu-<id>.
+    const menuButtons = container.querySelectorAll('[data-testid^="policy-row-menu-"]');
+    const firstButton = [...menuButtons].find((b) => b.tagName === "BUTTON");
+    fireEvent.click(firstButton);
+    const openEditor = await screen.findByText("Open editor");
+    fireEvent.click(openEditor);
+    expect(screen.getByTestId("policies-toast")).toHaveTextContent(/coming soon/);
+  });
+});

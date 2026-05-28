@@ -360,14 +360,26 @@ function BulkActionToast({ message, onDismiss }) {
 }
 
 function ResourceDetailPanel({ resource, onClose }) {
+  useEffect(() => {
+    if (!resource) return;
+    const onKey = (e) => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [resource, onClose]);
   if (!resource) return null;
   return (
+    <>
+      <div
+        data-testid="resources-detail-backdrop"
+        onClick={onClose}
+        style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.18)", zIndex: 300 }}
+      />
     <div
       data-testid="resources-detail-panel"
       role="dialog"
       aria-label="Resource details"
       style={{
-        position: "fixed", top: 0, right: 0, bottom: 0, width: 420, zIndex: 80,
+        position: "fixed", top: 0, right: 0, bottom: 0, width: 420, zIndex: 301,
         background: "#fff", borderLeft: "1px solid #e5e5e5", boxShadow: "-10px 0 30px rgba(0,0,0,0.08)",
         padding: "20px 24px", overflowY: "auto", fontFamily: "Inter, system-ui, sans-serif",
       }}
@@ -408,6 +420,7 @@ function ResourceDetailPanel({ resource, onClose }) {
         ))}
       </div>
     </div>
+    </>
   );
 }
 

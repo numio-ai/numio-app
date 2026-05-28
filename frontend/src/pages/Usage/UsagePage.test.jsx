@@ -172,3 +172,11 @@ describe("UsagePage — Export CSV", () => {
     }
   });
 });
+
+describe("UsagePage — breakdown Inspect button", () => {
+  it("clicking Inspect on a breakdown row is wired (has a testid-targeted button)", () => {
+    renderAt("/usage");
+    // CC-PAY is the first cost-center row in the default scenario
+    expect(screen.getByTestId("usage-breakdown-inspect-CC-PAY")).toBeInTheDocument();
+  });
+});

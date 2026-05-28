@@ -183,3 +183,23 @@ describe("TagGovernancePage — AWS Org schema conflicts (task 6)", () => {
     expect(screen.queryByTestId("tg-schema-conflicts")).not.toBeInTheDocument();
   });
 });
+
+describe("TagGovernancePage — row ⋯ menu (resources tab)", () => {
+  it("clicking ⋯ on a row shows a 'coming soon' toast (no silent failure)", () => {
+    renderAt("/tag-governance");
+    const buttons = document.querySelectorAll('[data-testid^="tg-row-menu-"]');
+    expect(buttons.length).toBeGreaterThan(0);
+    fireEvent.click(buttons[0]);
+    expect(screen.getByTestId("tg-toast")).toHaveTextContent(/coming soon/);
+  });
+});
+
+describe("TagGovernancePage — schema ⋯ button", () => {
+  it("clicking ⋯ on a schema row shows a 'coming soon' toast", async () => {
+    listSchemaConflicts.mockResolvedValueOnce({ conflicts: [] });
+    renderAt("/tag-governance?tab=schema");
+    const button = await screen.findByTestId("tg-schema-menu-env");
+    fireEvent.click(button);
+    expect(screen.getByTestId("tg-toast")).toHaveTextContent(/Edit env — coming soon/);
+  });
+});

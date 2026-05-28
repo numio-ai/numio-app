@@ -180,6 +180,22 @@ export default function PoliciesPage() {
   const [policies, setPolicies] = useState(INITIAL_POLICIES);
   const [selected, setSelected] = useState(new Set());
   const [newPolicyOpen, setNewPolicyOpen] = useState(false);
+  const [toast, setToast] = useState(null);
+
+  const handlePolicyRowAction = useCallback((action, policyId) => {
+    if (action === "Disable") {
+      setPolicies((prev) => prev.map((p) => p.id === policyId ? { ...p, enabled: false } : p));
+      setToast(`Disabled ${policyId}`);
+      return;
+    }
+    setToast(`${action} — coming soon`);
+  }, []);
+
+  useEffect(() => {
+    if (!toast) return;
+    const id = setTimeout(() => setToast(null), 2500);
+    return () => clearTimeout(id);
+  }, [toast]);
 
   const setView = (v) => setParams((prev) => { const np = new URLSearchParams(prev); np.set("view", v.id); return np; });
 
@@ -361,7 +377,7 @@ export default function PoliciesPage() {
                 data-testid={`policy-toggle-${p.id}`}
                 ariaLabel={`Toggle policy ${p.name}`}
               />
-              <RowMenu policy={p} onAction={() => {}} />
+              <RowMenu policy={p} onAction={handlePolicyRowAction} />
             </div>
           );
         })}
@@ -384,6 +400,15 @@ export default function PoliciesPage() {
               <button type="button" onClick={() => setNewPolicyOpen(false)} style={btnPrimary}>Close</button>
             </div>
           </div>
+        </div>
+      )}
+      {toast && (
+        <div
+          data-testid="policies-toast"
+          role="status"
+          style={{ position: "fixed", bottom: 24, left: "50%", transform: "translateX(-50%)", zIndex: 250, padding: "10px 18px", background: PL.text, color: "#fff", borderRadius: 8, fontSize: 13, boxShadow: "0 8px 24px rgba(0,0,0,0.18)" }}
+        >
+          {toast}
         </div>
       )}
     </div>

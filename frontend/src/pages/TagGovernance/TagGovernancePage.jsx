@@ -134,7 +134,7 @@ function ViewsPicker({ activeId, onSelect, onCopyLink }) {
   );
 }
 
-function ResourcesPane({ viewId, onViewSelect, onCopyLink, statusFilter, setStatusFilter, search, setSearch }) {
+function ResourcesPane({ viewId, onViewSelect, onCopyLink, statusFilter, setStatusFilter, search, setSearch, showToast }) {
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState(new Set());
   const [applyOpen, setApplyOpen] = useState(false);
@@ -331,7 +331,15 @@ function ResourcesPane({ viewId, onViewSelect, onCopyLink, statusFilter, setStat
               {REQUIRED_KEYS.map((s) => (
                 <TagChip key={s.key} value={r.tags?.[s.key]} schema={s} />
               ))}
-              <button type="button" aria-label="Row actions" style={{ width: 22, height: 22, padding: 0, background: "transparent", border: "none", color: TG.xMuted, fontSize: 14, cursor: "pointer" }}>⋯</button>
+              <button
+                type="button"
+                aria-label="Row actions"
+                data-testid={`tg-row-menu-${r.id}`}
+                onClick={() => showToast?.("Row actions — coming soon")}
+                style={{ width: 22, height: 22, padding: 0, background: "transparent", border: "none", color: TG.xMuted, fontSize: 14, cursor: "pointer" }}
+              >
+                ⋯
+              </button>
             </div>
           );
         })}
@@ -396,7 +404,7 @@ function SchemaConflicts({ conflicts }) {
   );
 }
 
-function SchemaPane({ conflicts = [] }) {
+function SchemaPane({ conflicts = [], showToast }) {
   return (
     <div>
       <SchemaConflicts conflicts={conflicts} />
@@ -449,7 +457,15 @@ function SchemaPane({ conflicts = [] }) {
                 {s.coverage}%
               </span>
               <span style={{ fontSize: 12, color: TG.muted }}>{s.owner}</span>
-              <button type="button" aria-label={`Edit ${s.key}`} style={{ width: 22, height: 22, padding: 0, background: "transparent", border: "none", color: TG.xMuted, fontSize: 14, cursor: "pointer" }}>⋯</button>
+              <button
+                type="button"
+                aria-label={`Edit ${s.key}`}
+                data-testid={`tg-schema-menu-${s.key}`}
+                onClick={() => showToast?.(`Edit ${s.key} — coming soon`)}
+                style={{ width: 22, height: 22, padding: 0, background: "transparent", border: "none", color: TG.xMuted, fontSize: 14, cursor: "pointer" }}
+              >
+                ⋯
+              </button>
             </div>
           );
         })}
@@ -469,6 +485,8 @@ export default function TagGovernancePage() {
   const search = params.get("q") || "";
 
   const [conflicts, setConflicts] = useState([]);
+  const [toast, setToast] = useState(null);
+  const showToast = useCallback((message) => setToast(message), []);
   useEffect(() => {
     let active = true;
     listSchemaConflicts()
@@ -476,6 +494,11 @@ export default function TagGovernancePage() {
       .catch(() => { if (active) setConflicts([]); });
     return () => { active = false; };
   }, []);
+  useEffect(() => {
+    if (!toast) return;
+    const id = setTimeout(() => setToast(null), 2500);
+    return () => clearTimeout(id);
+  }, [toast]);
 
   const setTab = (t) => setParams((prev) => { const np = new URLSearchParams(prev); np.set("tab", t); return np; });
   const setStatus = (s) => setParams((prev) => { const np = new URLSearchParams(prev); if (s) np.set("status", s); else np.delete("status"); return np; });
@@ -559,9 +582,19 @@ export default function TagGovernancePage() {
           setStatusFilter={setStatus}
           search={search}
           setSearch={setSearchParam}
+          showToast={showToast}
         />
       ) : (
-        <SchemaPane conflicts={conflicts} />
+        <SchemaPane conflicts={conflicts} showToast={showToast} />
+      )}
+      {toast && (
+        <div
+          data-testid="tg-toast"
+          role="status"
+          style={{ position: "fixed", bottom: 24, left: "50%", transform: "translateX(-50%)", zIndex: 250, padding: "10px 18px", background: TG.text, color: "#fff", borderRadius: 8, fontSize: 13, boxShadow: "0 8px 24px rgba(0,0,0,0.18)" }}
+        >
+          {toast}
+        </div>
       )}
     </div>
   );
