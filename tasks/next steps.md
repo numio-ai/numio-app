@@ -1,6 +1,5 @@
 ./scripts/taskman.sh list features --status backlog
 
-backlog    tag_management           Tag management — write back to AWS, AWS Org sync, drift detection, audit split
 backlog    aws_resource_discovery_v2 AWS resource discovery v2 — universe scan + 14-service enrichment
 backlog    ia_v2_persistence        IA v2 backend persistence + frontend mock-strip
 backlog    ia_v2_release_cleanup    IA v2 release cleanup — small follow-ups deferred during the IA v2 rollout

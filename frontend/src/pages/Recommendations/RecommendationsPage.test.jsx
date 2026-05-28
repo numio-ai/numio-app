@@ -1,6 +1,6 @@
 import React from "react";
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, act } from "@testing-library/react";
 import { MemoryRouter, Routes, Route } from "react-router-dom";
 import RecommendationsPage from "./RecommendationsPage";
 
@@ -122,5 +122,56 @@ describe("RecommendationsPage — Manual remediation (A8)", () => {
     renderAt("/recommendations");
     fireEvent.click(screen.getByTestId("rec-card-header-r-198"));
     expect(screen.queryByTestId("rec-section-manual-r-198")).not.toBeInTheDocument();
+  });
+});
+
+describe("RecommendationsPage — Dismiss / Snooze", () => {
+  it("Dismiss removes the recommendation from the visible list", () => {
+    renderAt("/recommendations");
+    expect(screen.getByTestId("rec-card-r-201")).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId("rec-dismiss-r-201"));
+    expect(screen.queryByTestId("rec-card-r-201")).not.toBeInTheDocument();
+  });
+
+  it("Snooze 7 days hides the recommendation and shows a toast", () => {
+    renderAt("/recommendations");
+    fireEvent.click(screen.getByTestId("rec-snooze-r-201"));
+    expect(screen.queryByTestId("rec-card-r-201")).not.toBeInTheDocument();
+    expect(screen.getByTestId("rec-toast")).toHaveTextContent(/Snoozed/);
+  });
+});
+
+describe("RecommendationsPage — Sort / Status dropdowns", () => {
+  it("Sort dropdown opens and offers Newest option", () => {
+    renderAt("/recommendations");
+    fireEvent.click(screen.getByTestId("rec-sort"));
+    expect(screen.getByTestId("rec-sort-option-newest")).toBeInTheDocument();
+  });
+
+  it("Status dropdown switches to All", () => {
+    renderAt("/recommendations");
+    fireEvent.click(screen.getByTestId("rec-status"));
+    fireEvent.click(screen.getByTestId("rec-status-option-all"));
+    expect(screen.getByTestId("rec-status")).toHaveTextContent(/All/);
+  });
+
+  it("dismissed recs reappear when Status=All", () => {
+    renderAt("/recommendations");
+    fireEvent.click(screen.getByTestId("rec-dismiss-r-201"));
+    expect(screen.queryByTestId("rec-card-r-201")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTestId("rec-status"));
+    fireEvent.click(screen.getByTestId("rec-status-option-all"));
+    expect(screen.getByTestId("rec-card-r-201")).toBeInTheDocument();
+  });
+});
+
+describe("RecommendationsPage — Rescan", () => {
+  it("clicking Rescan updates the timestamp caption from '· last 2h ago' to '· just now' after the scan", () => {
+    renderAt("/recommendations");
+    expect(screen.getByTestId("rec-rescan-label")).toHaveTextContent(/last 2h ago/);
+    fireEvent.click(screen.getByTestId("rec-rescan-button"));
+    expect(screen.getByTestId("rec-rescan-label")).toHaveTextContent(/scanning/);
+    act(() => { vi.advanceTimersByTime(900); });
+    expect(screen.getByTestId("rec-rescan-label")).toHaveTextContent(/just now/);
   });
 });

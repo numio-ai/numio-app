@@ -1,5 +1,5 @@
 ---
-status: backlog
+status: done
 kind: bug
 title: fix: recommendations page action buttons and dropdowns are non-functional
 ---
@@ -44,3 +44,22 @@ Out of scope:
 - Unit test for Dismiss/Snooze handlers updating recommendation list state.
 - Manual smoke: click each previously non-functional control and confirm visible change.
 - `npm test` green.
+
+## Summary
+
+### Steps completed
+1. Wired Dismiss → adds rec id to a `hiddenIds` set, hides the row, shows confirmation toast.
+2. Wired Snooze 7 days → same hide behavior with a different toast message.
+3. Replaced the inert `<span>` placeholders for Sort and Status with a reusable `MenuButton` component that opens a listbox-style popover.
+   - Sort options: Highest savings (default), Newest.
+   - Status options: Open (default), All — Status=All re-reveals dismissed/snoozed recs.
+4. Wired Rescan → switches caption to "· scanning…", flips to "· just now" after 800ms.
+5. Added 6 new Vitest tests covering each new behavior.
+6. Verified in live browser: Dismiss on the first card drops open count from 7 to 6 and reorders the list.
+
+### Changes made
+- `frontend/src/pages/Recommendations/RecommendationsPage.jsx`: new MenuButton, state, handlers; RecCard accepts onDismiss/onSnooze.
+- `frontend/src/pages/Recommendations/RecommendationsPage.test.jsx`: 6 new tests.
+
+### Deviations
+- Share link / Save as left untouched (cosmetic, out of urgent set).

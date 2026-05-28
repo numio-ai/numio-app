@@ -92,7 +92,7 @@ function CardHeader({ r, expanded, onToggle }) {
   );
 }
 
-function RecCard({ r, expanded, onToggle, onApplyOnce, onSendToAutopilot }) {
+function RecCard({ r, expanded, onToggle, onApplyOnce, onSendToAutopilot, onDismiss, onSnooze }) {
   if (!expanded) {
     return (
       <div data-testid={`rec-card-${r.id}`} data-expanded="false" style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, marginBottom: 8 }}>
@@ -194,8 +194,22 @@ function RecCard({ r, expanded, onToggle, onApplyOnce, onSendToAutopilot }) {
         )}
 
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 14, paddingTop: 14, borderTop: `1px solid ${C.border}` }}>
-          <button type="button" style={btnGhost}>Dismiss</button>
-          <button type="button" style={btnGhost}>Snooze 7 days</button>
+          <button
+            type="button"
+            data-testid={`rec-dismiss-${r.id}`}
+            onClick={() => onDismiss?.(r)}
+            style={btnGhost}
+          >
+            Dismiss
+          </button>
+          <button
+            type="button"
+            data-testid={`rec-snooze-${r.id}`}
+            onClick={() => onSnooze?.(r)}
+            style={btnGhost}
+          >
+            Snooze 7 days
+          </button>
           <span style={{ flex: 1 }} />
           <Link to="/govern/audit" style={{ fontSize: 12, color: C.muted, marginRight: 8, textDecoration: "none" }}>View full audit trail →</Link>
           <button
@@ -318,6 +332,71 @@ function Toast({ message, onDismiss }) {
   );
 }
 
+const SORT_OPTIONS = [
+  { id: "savings", label: "Highest savings" },
+  { id: "newest", label: "Newest" },
+];
+
+const STATUS_OPTIONS = [
+  { id: "open", label: "Open" },
+  { id: "all", label: "All" },
+];
+
+function MenuButton({ label, value, options, onChange, testId }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  useEffect(() => {
+    if (!open) return;
+    const onClick = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener("mousedown", onClick);
+    return () => document.removeEventListener("mousedown", onClick);
+  }, [open]);
+  const active = options.find((o) => o.id === value) || options[0];
+  return (
+    <div ref={ref} style={{ position: "relative" }}>
+      <button
+        type="button"
+        data-testid={testId}
+        onClick={() => setOpen((v) => !v)}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        style={{ padding: "4px 8px", borderRadius: 6, border: `1px solid ${C.border}`, fontSize: 12, color: C.muted, background: C.surface, cursor: "pointer" }}
+      >
+        {label}: {active.label} ▾
+      </button>
+      {open && (
+        <div
+          role="listbox"
+          style={{
+            position: "absolute", top: "calc(100% + 4px)", right: 0, minWidth: 160,
+            background: "#fff", border: `1px solid ${C.border}`, borderRadius: 8,
+            boxShadow: "0 10px 30px rgba(0,0,0,0.08)", padding: 4, zIndex: 50,
+          }}
+        >
+          {options.map((o) => {
+            const on = o.id === active.id;
+            return (
+              <div
+                key={o.id}
+                role="option"
+                aria-selected={on}
+                tabIndex={0}
+                data-testid={`${testId}-option-${o.id}`}
+                onClick={() => { onChange(o.id); setOpen(false); }}
+                onKeyDown={(e) => { if (e.key === "Enter") { onChange(o.id); setOpen(false); } }}
+                style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 10px", borderRadius: 4, fontSize: 12, color: C.text, cursor: "pointer", background: on ? "#f3f4f6" : "transparent" }}
+              >
+                <span style={{ width: 14, textAlign: "center" }}>{on ? "✓" : ""}</span>
+                <span>{o.label}</span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function RecommendationsPage() {
   const [params, setParams] = useSearchParams();
   const viewId = params.get("view") || "all";
@@ -326,6 +405,11 @@ export default function RecommendationsPage() {
   const [activeCategory, setActiveCategory] = useState("All");
   const [toast, setToast] = useState(null);
   const [autopilotRec, setAutopilotRec] = useState(null);
+  const [sortBy, setSortBy] = useState("savings");
+  const [statusFilter, setStatusFilter] = useState("open");
+  const [hiddenIds, setHiddenIds] = useState(() => new Set());
+  const [rescanLabel, setRescanLabel] = useState("· last 2h ago");
+  const [rescanning, setRescanning] = useState(false);
 
   const setView = (v) => {
     setParams((prev) => {
@@ -340,8 +424,42 @@ export default function RecommendationsPage() {
   const filtered = useMemo(() => {
     let items = applyView(view, REC_LIST);
     if (activeCategory !== "All") items = items.filter((r) => r.category === activeCategory);
+    if (statusFilter === "open") items = items.filter((r) => !hiddenIds.has(r.id));
+    if (sortBy === "newest") {
+      items = [...items].sort((a, b) => (b.id > a.id ? 1 : -1));
+    } else {
+      items = [...items].sort((a, b) => b.saving - a.saving);
+    }
     return items;
-  }, [view, activeCategory]);
+  }, [view, activeCategory, sortBy, statusFilter, hiddenIds]);
+
+  const onDismissRec = (r) => {
+    setHiddenIds((prev) => {
+      const next = new Set(prev);
+      next.add(r.id);
+      return next;
+    });
+    setToast(`Dismissed · ${r.title}`);
+  };
+
+  const onSnoozeRec = (r) => {
+    setHiddenIds((prev) => {
+      const next = new Set(prev);
+      next.add(r.id);
+      return next;
+    });
+    setToast(`Snoozed for 7 days · ${r.title}`);
+  };
+
+  const onRescan = () => {
+    if (rescanning) return;
+    setRescanning(true);
+    setRescanLabel("· scanning…");
+    setTimeout(() => {
+      setRescanning(false);
+      setRescanLabel("· just now");
+    }, 800);
+  };
 
   const toggleCard = (id) => {
     setExpandedIds((prev) => {
@@ -385,15 +503,19 @@ export default function RecommendationsPage() {
         <button
           type="button"
           data-testid="rec-rescan-button"
+          onClick={onRescan}
+          disabled={rescanning}
           style={{
             fontSize: 12, color: C.text2, background: C.surface, border: `1px solid ${C.border}`,
             borderRadius: 6, padding: "6px 12px",
-            display: "inline-flex", alignItems: "center", gap: 8, cursor: "pointer",
+            display: "inline-flex", alignItems: "center", gap: 8,
+            cursor: rescanning ? "default" : "pointer",
+            opacity: rescanning ? 0.7 : 1,
           }}
           title="Force a fresh scan of the fleet"
         >
           <span>⟳ Rescan</span>
-          <span style={{ color: C.xMuted, fontWeight: 400 }}>· last 2h ago</span>
+          <span data-testid="rec-rescan-label" style={{ color: C.xMuted, fontWeight: 400 }}>{rescanLabel}</span>
         </button>
       </div>
 
@@ -428,12 +550,8 @@ export default function RecommendationsPage() {
           );
         })}
         <span style={{ flex: 1 }} />
-        <span style={{ padding: "4px 8px", borderRadius: 6, border: `1px solid ${C.border}`, fontSize: 12, color: C.muted, background: C.surface }}>
-          Sort: Highest savings ▾
-        </span>
-        <span style={{ padding: "4px 8px", borderRadius: 6, border: `1px solid ${C.border}`, fontSize: 12, color: C.muted, background: C.surface }}>
-          Status: Open ▾
-        </span>
+        <MenuButton label="Sort" value={sortBy} options={SORT_OPTIONS} onChange={setSortBy} testId="rec-sort" />
+        <MenuButton label="Status" value={statusFilter} options={STATUS_OPTIONS} onChange={setStatusFilter} testId="rec-status" />
       </div>
 
       {filtered.length === 0 ? (
@@ -449,6 +567,8 @@ export default function RecommendationsPage() {
             onToggle={() => toggleCard(r.id)}
             onApplyOnce={onApplyOnce}
             onSendToAutopilot={onSendToAutopilot}
+            onDismiss={onDismissRec}
+            onSnooze={onSnoozeRec}
           />
         ))
       )}
