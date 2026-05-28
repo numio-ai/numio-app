@@ -652,7 +652,7 @@ export default function ResourcesPage() {
         <span style={{ flex: 1 }} />
         <span style={{ fontSize: 11, color: "#9ca3af" }}>
           {PLATFORM_DIM_COUNT} platform · {TAG_DIM_COUNT} tags available ·{" "}
-          <Link to="/tag-governance" style={{ color: "#6d28d9", fontWeight: 500, textDecoration: "none" }}>Manage tag schema →</Link>
+          <Link to="/tag-governance?tab=schema" style={{ color: "#6d28d9", fontWeight: 500, textDecoration: "none" }}>Manage tag schema →</Link>
         </span>
       </div>
 
