@@ -1,14 +1,15 @@
 ---
 name: deploy-demo
-description: Build the Numio frontend in mock mode and publish it as the public standalone demo at demo.numio.ai. Use when the user asks to deploy, refresh, publish, or "ship" the demo, or to update demo.numio.ai. Wraps scripts/deploy-demo.sh (mock build -> S3 -> CloudFront invalidation -> verify).
+description: Build the Numio frontend in mock mode and publish it as the public standalone demo at demo.numio.ai. Use when the user asks to deploy, refresh, publish, or "ship" the demo, or to update demo.numio.ai. Wraps the co-located deploy-demo.sh (mock build -> S3 -> CloudFront invalidation -> verify).
 ---
 
 # Deploy the public demo (demo.numio.ai)
 
 The public demo at **https://demo.numio.ai** is the real Numio frontend built in
 mock mode (`VITE_API_MODE=mock`): synthetic data, no backend, no separate fork.
-This skill publishes a fresh build of it. Everything is wrapped by
-`scripts/deploy-demo.sh`.
+This skill publishes a fresh build of it. The wrapper script lives next to this
+SKILL.md as `deploy-demo.sh` (path from repo root:
+`.claude/skills/deploy-demo/deploy-demo.sh`).
 
 ## When this skill applies
 - "deploy / refresh / publish the demo", "update demo.numio.ai", "ship the demo".
@@ -30,14 +31,14 @@ ahead this turn). Never pass `-y` on the user's behalf without that go-ahead.
 
 2. **Dry run** to show exactly what will happen:
    ```bash
-   ./scripts/deploy-demo.sh --dry-run
+   ./.claude/skills/deploy-demo/deploy-demo.sh --dry-run
    ```
 
 3. **Deploy** once the user confirms:
    ```bash
-   ./scripts/deploy-demo.sh          # prompts before publishing
+   ./.claude/skills/deploy-demo/deploy-demo.sh          # prompts before publishing
    # or, when the user has already approved this turn:
-   ./scripts/deploy-demo.sh -y
+   ./.claude/skills/deploy-demo/deploy-demo.sh -y
    ```
    The script builds the mock bundle, **refuses to deploy a non-mock (real) build**
    (safety gate), syncs `frontend/dist/` to S3 with `--delete`, invalidates

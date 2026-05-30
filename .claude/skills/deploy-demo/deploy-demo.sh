@@ -6,11 +6,15 @@
 # VITE_API_MODE=mock — synthetic data, no backend, no separate fork to keep in
 # sync. Target infra is the prod-website-demo-numio-ai stack (S3 + CloudFront).
 #
+# This script is co-located with the `deploy-demo` Claude Code skill under
+# .claude/skills/deploy-demo/. The skill (SKILL.md) is the entry point; invoke
+# this script via the skill, or directly:
+#
 # Usage:
-#   ./scripts/deploy-demo.sh                 # build (mock) + deploy + invalidate + verify
-#   ./scripts/deploy-demo.sh --build-only    # just build the mock bundle
-#   ./scripts/deploy-demo.sh --dry-run       # print the build/deploy commands, do nothing
-#   ./scripts/deploy-demo.sh -y              # skip the confirmation prompt (CI)
+#   ./.claude/skills/deploy-demo/deploy-demo.sh              # build (mock) + deploy + invalidate + verify
+#   ./.claude/skills/deploy-demo/deploy-demo.sh --build-only # just build the mock bundle
+#   ./.claude/skills/deploy-demo/deploy-demo.sh --dry-run    # print the build/deploy commands, do nothing
+#   ./.claude/skills/deploy-demo/deploy-demo.sh -y           # skip the confirmation prompt (CI)
 #
 # Prerequisite: AWS credentials for the agenture-prod profile (SSO login lives in
 # the infra repo: `./scripts/aws-admin.sh sso login`).
@@ -18,7 +22,8 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_DIR="${SCRIPT_DIR}/.."
+# Three levels up from .claude/skills/deploy-demo/ → repo root.
+PROJECT_DIR="${SCRIPT_DIR}/../../.."
 FRONTEND_DIR="${PROJECT_DIR}/frontend"
 
 # Deploy target — overridable via env or flags. Defaults match
@@ -36,7 +41,7 @@ require_cmd() { command -v "$1" >/dev/null 2>&1 || die "missing required command
 
 usage() {
   cat <<EOF
-Usage: scripts/deploy-demo.sh [options]
+Usage: .claude/skills/deploy-demo/deploy-demo.sh [options]
 
 Build the frontend in mock mode and publish it to ${DEMO_URL}.
 
