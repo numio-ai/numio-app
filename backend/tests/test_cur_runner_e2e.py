@@ -132,9 +132,9 @@ async def committed_cur_account(real_session_factory, default_workspace_uuid, cl
             role_arn=f"arn:aws:iam::{aws_account_id}:role/NumioAccess",
             status="connected",
             environment_label="production",
-            cur_s3_bucket="costwatch-cur-bucket",
-            cur_s3_prefix="cur/costwatch-cur-export",
-            cur_report_name="costwatch-cur-export",
+            cur_s3_bucket="example-cur-bucket",
+            cur_s3_prefix="cur/example-cur-export",
+            cur_report_name="example-cur-export",
         )
         session.add(account)
         await session.commit()
@@ -156,7 +156,7 @@ def _make_runner_s3_mock(parquet_rows: list[dict]) -> MagicMock:
     parquet_bytes = _make_cur_parquet(parquet_rows)
     manifest = {
         "executionId": "test-exec",
-        "dataFiles": ["s3://costwatch-cur-bucket/data/file.parquet"],
+        "dataFiles": ["s3://example-cur-bucket/data/file.parquet"],
     }
     manifest_last_modified = datetime(2025, 11, 25, tzinfo=timezone.utc)
 
@@ -175,8 +175,8 @@ def _make_runner_s3_mock(parquet_rows: list[dict]) -> MagicMock:
             "Contents": [
                 {
                     "Key": (
-                        "cur/costwatch-cur-export/metadata/BILLING_PERIOD=2025-11"
-                        "/ts-uuid/costwatch-cur-export-Manifest.json"
+                        "cur/example-cur-export/metadata/BILLING_PERIOD=2025-11"
+                        "/ts-uuid/example-cur-export-Manifest.json"
                     ),
                     "LastModified": manifest_last_modified,
                 }
@@ -351,8 +351,8 @@ class TestRunnerEndToEnd:
                     "Contents": [
                         {
                             "Key": (
-                                "cur/costwatch-cur-export/metadata/BILLING_PERIOD=2025-11"
-                                "/ts-uuid-2/costwatch-cur-export-Manifest.json"
+                                "cur/example-cur-export/metadata/BILLING_PERIOD=2025-11"
+                                "/ts-uuid-2/example-cur-export-Manifest.json"
                             ),
                             "LastModified": datetime.now(timezone.utc),
                         }

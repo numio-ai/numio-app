@@ -1,5 +1,5 @@
 --------------------------------------------------
-# TODO: Update this document to reflect the new architecture. Align with UI demo from `/Users/vladimirkroz/repos/agenture-root/numio-demo`. Align with spec `Numio vision.md`.
+# TODO: Update this document to reflect the new architecture. Align with the current UI demo and `Numio vision.md`.
 --------------------------------------------------
 
 ## Architecture

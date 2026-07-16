@@ -50,7 +50,7 @@ Every tool call (`Bash`, `Edit`, `Write`, `MultiEdit`, `Read`, etc.) must refere
 The session's working directory is already set correctly by the harness — it may be the main repo or a worktree under `.Codex/worktrees/<name>/`. Absolute paths silently bypass the active worktree and write to the wrong checkout. This has happened: an entire task feature's worth of work landed on the wrong branch because absolute paths were used. Don't repeat it.
 
 - **Yes:** `backend/src/numio/api/onboarding.py`, `./scripts/taskman.sh ...`, `tasks/backlog/foo.md`
-- **No:** `/Users/vladimirkroz/repos/numio-root/numio-app/backend/...`, `cd /Users/.../numio-app && ...`
+- **No:** `/Users/example/repos/numio-root/numio-app/backend/...`, `cd /Users/.../numio-app && ...`
 
 The only exception is paths to genuinely external resources (e.g. `/tmp/...`, sibling repos like `../infra/`) — and even those should be flagged to the user before use.
 

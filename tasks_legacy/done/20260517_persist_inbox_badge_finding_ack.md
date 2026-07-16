@@ -93,4 +93,4 @@ Modified:
 - Migration: `backend/alembic/versions/b9c1d2e3f4a5_finding_acks.py`.
 - Production code under guard: `backend/src/numio/api/ia_v2_inbox.py`, `backend/src/numio/db/finding_ack_repository.py`.
 - Parent feature: `tasks/features/20260517_ia_v2_persistence.md` (B1 of 8).
-- Plan: `/Users/vladimirkroz/.claude/plans/binary-popping-zebra.md` (Workstream B1).
+- Plan: `/Users/example/.claude/plans/binary-popping-zebra.md` (Workstream B1).

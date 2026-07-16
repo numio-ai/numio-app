@@ -21,7 +21,7 @@
 
 set -euo pipefail
 
-PROFILE="agenture-admin"
+PROFILE="numio-admin"
 REGION="us-east-1"
 
 usage() {

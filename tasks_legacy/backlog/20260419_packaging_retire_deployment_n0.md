@@ -17,7 +17,7 @@ Current release scope is **laptop-only**: operators install Numio with Docker + 
 
 Keeping the n0 tree around creates three problems:
 1. It implies a production deploy path that the operator runbook does not — and will not — cover.
-2. It references `scripts/tools/ecr.sh` and AWS profile `agenture-prod`, which are Numio-internal and irrelevant to current operators.
+2. It references `scripts/tools/ecr.sh` and AWS profile `numio-prod`, which are Numio-internal and irrelevant to current operators.
 3. It is the root cause for most of the mixed dev/ops concerns in the existing `docs/ops-runbook.md`.
 
 ## Problem
@@ -28,14 +28,14 @@ Until `deployment/n0/` and its supporting scripts are removed (or clearly archiv
 
 1. Remove `deployment/n0/` and any scripts / shell helpers dedicated to the n0 path.
 2. Leave the repo consistent with: "the only supported distribution is GHCR images + shipped compose file, run on a laptop."
-3. Update any remaining references to n0 / ECR / `agenture-prod` in `docs/` and `scripts/`.
+3. Update any remaining references to n0 / ECR / `numio-prod` in `docs/` and `scripts/`.
 
 ## Scope
 
 - Delete `deployment/n0/` (Caddyfile, compose overlay, deploy env).
 - Delete or simplify `scripts/tools/ecr.sh` if no remaining caller needs it.
 - Audit `scripts/numio-dev.sh` for `deploy` subcommand and n0-specific logic; remove or deprecate.
-- Search for `agenture-prod`, `app.numio.ai`, `ECR`, `n0` in `docs/` and `scripts/`; remove or flag each hit.
+- Search for `numio-prod`, `app.numio.ai`, `ECR`, `n0` in `docs/` and `scripts/`; remove or flag each hit.
 
 ## Out of scope
 
@@ -44,7 +44,7 @@ Until `deployment/n0/` and its supporting scripts are removed (or clearly archiv
 ## Acceptance criteria
 
 1. `deployment/n0/` no longer exists on `main` / `dev`.
-2. `grep -rn 'agenture-prod\|app\.numio\.ai\|deployment/n0\|n0/docker-compose' docs/ scripts/` returns no hits.
+2. `grep -rn 'numio-prod\|app\.numio\.ai\|deployment/n0\|n0/docker-compose' docs/ scripts/` returns no hits.
 3. `./scripts/numio-dev.sh --help` no longer advertises a `deploy` subcommand (or it is marked `DEPRECATED` with a clear removal date).
 4. `README.md` and `CLAUDE.md` do not reference the n0 deploy flow.
 

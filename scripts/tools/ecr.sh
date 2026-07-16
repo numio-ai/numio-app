@@ -22,7 +22,7 @@ get_ecr_registry() {
     log_error "Failed to get AWS account ID using profile '${AWS_PROFILE:-<default>}'."
     log_error ""
     log_error "Check if credentials are valid:"
-    log_error "  aws sts get-caller-identity --profile ${AWS_PROFILE:-agenture-prod}"
+    log_error "  aws sts get-caller-identity --profile ${AWS_PROFILE:-numio-prod}"
     log_error ""
     log_error "If expired, refresh SSO login:"
     log_error "  ../infra/scripts/aws-admin.sh sso login"

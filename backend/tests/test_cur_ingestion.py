@@ -133,8 +133,8 @@ class TestParseS3Url:
         assert key == "path/to/file.parquet"
 
     def test_nested_key(self):
-        bucket, key = _parse_s3_url("s3://costwatch-cur-bucket/cur/export/data/file.snappy.parquet")
-        assert bucket == "costwatch-cur-bucket"
+        bucket, key = _parse_s3_url("s3://example-cur-bucket/cur/export/data/file.snappy.parquet")
+        assert bucket == "example-cur-bucket"
         assert key == "cur/export/data/file.snappy.parquet"
 
 
@@ -302,9 +302,9 @@ async def account_with_cur(db_session, default_workspace_id):
         role_arn="arn:aws:iam::123456789012:role/NumioAccess",
         status="active",
         environment_label="production",
-        cur_s3_bucket="costwatch-cur-bucket",
-        cur_s3_prefix="cur/costwatch-cur-export",
-        cur_report_name="costwatch-cur-export",
+        cur_s3_bucket="example-cur-bucket",
+        cur_s3_prefix="cur/example-cur-export",
+        cur_report_name="example-cur-export",
     )
     db_session.add(account)
     await db_session.flush()
@@ -471,7 +471,7 @@ class TestIncrementalSync:
                     {
                         "Key": (
                             "cur/export/metadata/BILLING_PERIOD=2025-11"
-                            "/ts-uuid/costwatch-cur-export-Manifest.json"
+                            "/ts-uuid/example-cur-export-Manifest.json"
                         ),
                         "LastModified": manifest_last_modified,
                     }

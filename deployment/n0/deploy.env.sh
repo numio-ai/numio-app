@@ -10,7 +10,7 @@ INSTALL_DIR=/data/numio
 BASE_URL=https://app.numio.ai
 
 # AWS profile for deployment operations (ECR push, SSM secrets)
-AWS_PROFILE=agenture-prod
+AWS_PROFILE=numio-prod
 
 # AWS region for SSM Parameter Store (target uses instance role)
 AWS_REGION=us-east-1
