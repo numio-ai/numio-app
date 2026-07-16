@@ -40,9 +40,7 @@ docker_build() {
 
   cd "$project_dir"
 
-  # Build with docker compose using base file only
-  # Production overlays (like n0) replace build: with image: (ECR pulls)
-  # so we only use the base compose file which has build: directives
+  # Build with the base compose file, which contains the build directives.
   local compose_cmd="docker compose -f docker-compose.yml build"
 
   if [[ -n "$service" ]]; then

@@ -53,9 +53,7 @@ scripts/
     ├── common.sh             # Shared utilities (logging, validation)
     ├── dev.sh                # Development lifecycle helpers (run, stop, status, etc.)
     ├── docker.sh             # Docker build helpers
-    ├── ecr.sh                # ECR operations (login, push, pull)
-    ├── env.sh                # Environment helpers
-    └── secrets.sh            # AWS SSM secret management
+    └── worktree.sh           # Worktree-scoped ports and Compose project names
 ```
 
 ### Script Relationships
@@ -77,7 +75,7 @@ scripts/
 │  └── build                                                  │
 ├─────────────────────────────────────────────────────────────┤
 │  tools/common.sh  tools/dev.sh  tools/build.sh              │
-│  tools/docker.sh  tools/env.sh  tools/ecr.sh                │
+│  tools/docker.sh  tools/worktree.sh                         │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -576,7 +574,6 @@ Provides core utilities used by all scripts.
 | `require_cmd <cmd>` | Verify command exists |
 | `check_docker` | Verify Docker is running |
 | `check_docker_compose` | Verify Docker Compose V2 |
-| `parse_host_flag "$@"` | Extract `--host=VALUE` from arguments |
 
 ### 6.2 tools/dev.sh
 
@@ -590,9 +587,9 @@ Docker image build implementation. Provides `build_main`, `build_usage`.
 
 Docker build helpers: image naming (`get_local_image_name`), tagging (`docker_tag_images`), and flag parsing (`parse_tag_flag`, `parse_service_flag`).
 
-### 6.5 tools/env.sh
+### 6.5 tools/worktree.sh
 
-Environment-related helpers: AWS region resolution, overlay directory paths, `.env` file loading.
+Worktree-scoped Compose project naming, port allocation, and environment loading.
 
 ---
 
@@ -602,22 +599,17 @@ Environment-related helpers: AWS region resolution, overlay directory paths, `.e
 
 | Variable | Default | Used By | Description |
 |----------|---------|---------|-------------|
-| `NUMIO_ENV` | `localhost` | Scripts | Environment identifier for compose overlays |
 | `NUMIO_DEBUG` | `0` | All scripts | Enable debug logging (0/1) |
 
-### 7.2 Overlay Structure
+### 7.2 Laptop Container Configuration
 
-Each environment has a dedicated overlay directory:
+The repository retains one container configuration for local and laptop operation:
 
 ```
 deployment/
-├── localhost/
-│   └── docker-compose.override.yml
-└── n0/
-    ├── Caddyfile
-    ├── deploy.env.sh
-    ├── docker-compose.override.yml
-    └── static-config
+└── localhost/
+    ├── .env.example
+    └── docker-compose.yml
 ```
 
 ---

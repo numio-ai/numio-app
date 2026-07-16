@@ -24,15 +24,14 @@ Key pattern: business logic lives in `core/`, both `api/` and `mcp/` are thin la
 
 
 ### Environment & Deployment
-- **`deployment/localhost/`** - Local dev config
-- **`deployment/n0/`** - Production config (app.numio.ai, Docker + Caddy)
+- **`deployment/localhost/`** - Local and laptop container config
 - **`.env`** - Environment variables (not committed; see `deployment/localhost/.env.example`)
 - **`VITE_API_URL`** env var controls which backend the frontend talks to (baked into JS bundle at build time)
 
 ### Control Plane Scripts (`scripts/`)
 - **`numio-ctl.sh`** - Runtime management (start/stop/dev/status/logs/health)
-- **`numio-dev.sh`** - Build, setup, and deployment operations
-- **`tools/`** - Shared shell utilities (build, dev, docker, ecr, env, secrets)
+- **`numio-dev.sh`** - Local development, setup, and build operations
+- **`tools/`** - Shared shell utilities (build, dev, docker, worktree)
 
 ## Key Technical Details
 

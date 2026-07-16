@@ -165,12 +165,11 @@ The current frontend is a dummy prototype from `numio-demo` — it serves as a v
 
 ## Environment & Deployment
 
-- **`deployment/localhost/`** — Local dev config
-- **`deployment/n0/`** — Production config (app.numio.ai, Docker + Caddy)
+- **`deployment/localhost/`** — Local and laptop container config
 - **`.env`** — Environment variables (not committed; see `deployment/localhost/.env.example`)
 
 ### Control Plane Scripts (`scripts/`)
 
 - **`numio-ctl.sh`** — Runtime management (start/stop/dev/status/logs/health)
-- **`numio-dev.sh`** — Build, setup, and deployment operations
+- **`numio-dev.sh`** — Local development, setup, and build operations
 - **`tools/`** — Shared shell utilities

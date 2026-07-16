@@ -596,9 +596,8 @@ numio/
 │   │   └── pages/                 # Page components
 │   ├── package.json
 │   └── Dockerfile
-├── deployment/                    # Environment-specific configs
-│   ├── localhost/                  # Local development
-│   └── n0/                        # Production (app.numio.ai)
+├── deployment/                    # Laptop container configuration
+│   └── localhost/                 # Local and laptop operation
 ├── scripts/
 │   ├── numio-dev.sh               # Development lifecycle CLI
 │   ├── numio-ctl.sh               # Production container management
@@ -614,7 +613,7 @@ numio/
 - **Backend:** FastAPI (REST API) + FastMCP (MCP server for AI agents). Shared business logic in `core/`.
 - **Frontend:** React 19 + Vite 6 + react-router-dom.
 - **Infrastructure:** PostgreSQL 16, Valkey 8 (Redis-compatible cache).
-- **Production:** Docker containers behind Caddy reverse proxy at app.numio.ai.
+- **Operator distribution:** Docker containers from published images, run on a laptop.
 
 ### Documentation
 

@@ -15,7 +15,7 @@ Numio is a cloud cost management co-pilot and agent. The codebase is a monorepo 
 
 - `frontend/` - React prototype (dummy UI from demo, will be replaced with production UI)
 - `backend/` - Python/FastAPI backend (being redesigned per Phase 1 tasks)
-- `deployment/` - Environment configs (laptop only; `deployment/n0/` retirement tracked in `tasks/backlog/20260416_13_retire_deployment_n0.md`)
+- `deployment/` - Laptop-only container configuration
 - `scripts/` - Build and control plane scripts
 - `docs/` - Project documentation
 - `tasks/` - Task tracking (backlog / active / done)
