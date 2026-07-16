@@ -62,7 +62,11 @@ async function realRequest(path, { headers, ...rest } = {}) {
   });
   if (!res.ok) {
     const body = await res.json().catch(() => null);
-    const message = body?.message || body?.detail || res.statusText;
+    let message = body?.message || body?.detail || res.statusText;
+    if (body?.details?.length) {
+      const fieldErrors = body.details.map((detail) => `${detail.field}: ${detail.message}`).join("; ");
+      message = `${message}: ${fieldErrors}`;
+    }
     throw new ApiError(message, {
       status: res.status,
       detail: body?.detail,

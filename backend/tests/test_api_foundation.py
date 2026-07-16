@@ -63,7 +63,7 @@ class TestErrorHandling:
         assert body["message"] == "An unexpected error occurred"
         assert body["request_id"]  # non-empty
 
-    async def test_validation_error_returns_field_details(self, client):
+    async def test_validation_error_returns_field_details(self, client, caplog):
         resp = await client.get("/validate?count=notanumber")
         assert resp.status_code == 422
         body = resp.json()
@@ -73,6 +73,8 @@ class TestErrorHandling:
         assert len(body["details"]) >= 1
         assert body["details"][0]["field"]
         assert body["details"][0]["message"]
+        assert "Request validation failed: GET /validate" in caplog.text
+        assert "query.count" in caplog.text
 
     async def test_404_returns_structured_json(self, client):
         resp = await client.get("/nonexistent")

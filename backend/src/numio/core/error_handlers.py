@@ -33,6 +33,13 @@ async def handle_validation_error(request: Request, exc: RequestValidationError)
         field = ".".join(str(loc) for loc in err["loc"])
         details.append(ErrorDetail(field=field, message=err["msg"]))
 
+    logger.warning(
+        "Request validation failed: %s %s — %s",
+        request.method,
+        request.url.path,
+        "; ".join(f"{d.field}: {d.message}" for d in details),
+    )
+
     body = ErrorResponse(
         error_code="VALIDATION_ERROR",
         message="Request validation failed",

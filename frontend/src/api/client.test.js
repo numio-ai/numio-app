@@ -52,6 +52,28 @@ describe("request() — real mode", () => {
     });
   });
 
+  it("includes field-level validation details in the error message", async () => {
+    mockFetch(async () => ({
+      ok: false,
+      status: 422,
+      statusText: "Unprocessable Entity",
+      json: async () => ({
+        message: "Request validation failed",
+        details: [
+          { field: "body.external_id", message: "Field required" },
+          { field: "body.aws_account_id", message: "Invalid account ID" },
+        ],
+      }),
+    }));
+
+    await expect(request("/api/v1/accounts", { method: "POST" })).rejects.toMatchObject({
+      name: "ApiError",
+      status: 422,
+      message:
+        "Request validation failed: body.external_id: Field required; body.aws_account_id: Invalid account ID",
+    });
+  });
+
   it("gracefulRequest resolves to null instead of throwing", async () => {
     mockFetch(async () => ({ ok: false, status: 500, statusText: "Server Error", json: async () => null }));
     await expect(gracefulRequest("/api/v1/thing")).resolves.toBeNull();
