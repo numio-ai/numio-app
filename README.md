@@ -1,6 +1,11 @@
 # Numio
 
-Cloud cost management platform for multi-cloud and AI workloads.
+Open-source cloud cost management co-pilot for AWS and AI workloads.
+
+> [!IMPORTANT]
+> Numio is currently alpha software. It detects and recommends cost changes but
+> does not autonomously execute infrastructure changes. AWS is the only cloud
+> provider supported in the current release.
 
 ## Quick Start
 
@@ -9,7 +14,7 @@ Requires [Docker Desktop](https://www.docker.com/products/docker-desktop/) (incl
 **1. Clone and start**
 
 ```bash
-git clone git@gitlab.com:numio-ai/numio-app.git
+git clone git@github.com:numio-ai/numio-app.git
 cd numio-app
 docker compose up -d --build
 ```
@@ -57,6 +62,12 @@ See the [Operations Runbook](docs/ops-runbook.md) for install details, configura
 - [Developer Runbook](docs/dev-runbook.md) — Development setup with hot reload
 - [Architecture](docs/architecture-design.md) — System architecture
 - [Functional Specification](docs/functional-specification.md) — Product specification
+
+## Contributing and security
+
+- See [CONTRIBUTING.md](CONTRIBUTING.md) for the development workflow and test commands.
+- Report vulnerabilities privately according to [SECURITY.md](SECURITY.md).
+- Pull requests should target the `dev` integration branch. `main` is the public release branch.
 
 ## License
 

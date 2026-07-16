@@ -1,5 +1,42 @@
 # Contributing to Numio
 
+Thank you for helping improve Numio.
+
+## Development workflow
+
+1. Create a topic branch from `dev`.
+2. Keep changes focused and include tests for changed behavior.
+3. Run the backend and frontend checks described below.
+4. Open a pull request targeting `dev`.
+
+`dev` is the integration branch. Tested changes are promoted from `dev` to
+`main`, which is the public release branch.
+
+Do not include credentials, account identifiers, customer data, private URLs,
+or other sensitive information in source code, examples, fixtures, commits, or
+pull-request descriptions. Follow [SECURITY.md](SECURITY.md) for vulnerability
+reports.
+
+## Verification
+
+Backend:
+
+```bash
+cd backend
+VIRTUAL_ENV=.venv uv run --active pytest -q
+```
+
+Frontend:
+
+```bash
+cd frontend
+npm test
+npm run build
+```
+
+See [docs/dev-runbook.md](docs/dev-runbook.md) for initial setup and local
+development commands.
+
 ## Releasing container images
 
 Numio ships two public container images from GitLab CI:
@@ -22,10 +59,11 @@ Both images are public. A host with no GitLab authentication can pull them.
 ### Cutting a release
 
 1. Merge everything into the default branch.
-2. From the default branch, create an annotated tag matching `vX.Y.Z`:
+2. From `main`, create an annotated tag matching `vX.Y.Z` and push it to the
+   GitLab mirror, where the container publishing pipeline runs:
    ```
    git tag -a v0.1.0 -m "Numio 0.1.0"
-   git push origin v0.1.0
+   git push gitlab v0.1.0
    ```
 3. Watch the pipeline under **CI/CD → Pipelines**. Two jobs (`build:numio-srv`, `build:numio-ui`) publish to the container registry.
 4. Verify from a host with no GitLab login:

@@ -16,6 +16,21 @@ node_modules/
 .env.*
 !.env.example
 
+# Credentials and private key material
+.aws/
+credentials
+credentials.*
+*.credentials
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+.netrc
+.npmrc
+.pypirc
+
 # Logs
 *.log
 .frontend.log
