@@ -1,0 +1,43 @@
+---
+status: backlog
+kind: task
+feature: ia_v2_persistence
+title: Persist Recommendations evidence + durable Rescan dedupe
+---
+
+# Persist Recommendations evidence + durable Rescan dedupe
+
+## Problem statement
+
+`api/ia_v2_recommendations_evidence.py` returns a hardcoded evidence body for `r-201` and 404 for `missing`. Rescan dedupe lives in a module-level dict that resets on restart. Real implementation needs an `evidence` column on the existing `recommendations` table and a durable lock for rescan idempotency.
+
+## Scope
+
+In scope:
+- Alembic migration: extend the existing `recommendations` table (or its model) with an `evidence JSONB` column carrying `{ signals, sample, what_happens, exclusions, risk, manual_remediation, generated_at }`. Backfill via a one-time job using the existing rules-based engine; new rows get evidence at generation time.
+- Alembic migration: `recommendations_rescans(id, workspace_id, idempotency_key, started_at, finished_at, status, error)` with unique `(workspace_id, idempotency_key)`.
+- `GET /recommendations-v2/{id}/evidence` reads from the new `evidence` column; 404 stays 404 (id not found).
+- `POST /recommendations-v2/rescan` upserts into `recommendations_rescans`; within the dedupe window (still 15 min) returns the original `started_at` + `deduped=true`.
+- Frontend: `RecommendationsPage` consumes the live `GET /recommendations` (existing endpoint, returns recommendation list) and per-card `GET /recommendations-v2/{id}/evidence` on expand. `REC_HIBERNATE` and `REC_LIST` arrays in `recommendationsMockData.js` are deleted.
+
+Out of scope:
+- LLM-backed evidence generation — keep the rules-based engine.
+- Rescan job orchestration — the endpoint records intent; the worker that picks it up is `recommendation_generation` (existing).
+
+## Acceptance criteria
+
+A1. Alembic migration applies; existing recommendations carry an `evidence` payload after backfill.
+
+A2. `GET /recommendations-v2/{id}/evidence` reads from DB; 404 for unknown id.
+
+A3. `POST /rescan` dedupe is durable across process restart (uses `recommendations_rescans` row, not module-level dict).
+
+A4. Pytest: evidence persistence; dedupe survives a simulated restart (drop + reinit engine fixture); 15-min window honored.
+
+A5. Frontend `RecommendationsPage` fetches evidence on expand; the mock data file no longer exports `REC_LIST` or `REC_HIBERNATE`.
+
+## Quality gates
+
+- Backend pytest passes; alembic migration idempotent.
+- Frontend `npm test` + `npm run build` pass.
+- `git grep -F 'REC_HIBERNATE' frontend/src/pages/Recommendations/` returns zero hits.

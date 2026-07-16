@@ -1,0 +1,94 @@
+---
+status: done
+kind: task
+feature: tools
+title: numio-dev.sh: print URLs in status and auto-open browser on run all
+---
+
+# numio-dev.sh: print URLs in status and auto-open browser on run all
+
+## Problem statement
+
+Two small papercuts in `scripts/numio-dev.sh` slow down the daily dev loop:
+
+1. **`status` shows ports but not URLs.** Today's output is:
+   ```
+   Worktree stack:
+     project=numio-app-083a78  backend=50786  frontend(dev)=50788  postgres=50784  valkey=50785
+   ```
+   The operator has to mentally assemble `http://localhost:<port>` for the service they want to open, every time. With per-worktree dynamic ports (see `.numio/worktree.env`) this is more error-prone than on a fixed-port setup — the port changes per worktree, so muscle memory does not help.
+
+2. **`run all` does not open the UI.** After a successful `./scripts/numio-dev.sh run all`, the operator still has to look up this worktree's frontend port and paste the URL into a browser. The script already knows the port (it just allocated it) and already prints it in `status`.
+
+Both items are isolated UX improvements to the dev control script — no behaviour change for infra or app code.
+
+## Scope
+
+**In scope**
+
+- Update `status` output (currently in `scripts/tools/dev.sh` around lines 514–515) so each service line includes the URL the user can click/open, not just the raw port. URLs to include for HTTP services:
+  - backend: `http://localhost:<BACKEND_HOST_PORT>` (also note `/health`, `/docs`)
+  - frontend (dev): `http://localhost:<FRONTEND_DEV_PORT>`
+  - postgres / valkey: keep port (no HTTP URL) but format consistently
+- After `./scripts/numio-dev.sh run all` completes successfully, open the default browser to the frontend dev URL (`http://localhost:<FRONTEND_DEV_PORT>`).
+  - macOS: `open <url>`. The repo is macOS-first (see `Platform: darwin` in CLAUDE context), so a macOS-only implementation is acceptable; on other platforms the script must fall back gracefully (print the URL, do not error).
+  - Only open the browser when `run all` succeeds end-to-end (backend + frontend + worker all started). If any component fails, do not open the browser.
+  - Provide a way to suppress browser-open for non-interactive use (e.g. `--no-browser` flag, or skip if `CI=true` / non-TTY stdout). Pick whichever is simpler; document it.
+- Update `docs/dev-runbook.md` to reflect the new `status` output and the new auto-open behaviour, including how to suppress it.
+
+**Out of scope**
+
+- Equivalent changes to `scripts/numio-ctl.sh` (operator mode). Mention as a follow-up if helpful; do not bundle.
+- Any change to port allocation, service startup order, or health-check logic.
+- Adding new services to `status`.
+
+## Acceptance criteria
+
+1. Running `./scripts/numio-dev.sh status` in a configured worktree prints each HTTP service with its full `http://localhost:<port>` URL, not only the port number. Postgres and Valkey lines remain port-only but visually align with the HTTP lines.
+2. Running `./scripts/numio-dev.sh run all` to completion on macOS opens the default browser to the frontend dev URL of the current worktree exactly once. On a worktree where frontend is already running, the URL still opens (idempotent).
+3. If `run all` fails (any of backend/frontend/worker do not start), the browser is **not** opened, and the script reports the failure as it does today.
+4. The auto-open can be suppressed (flag or env var documented in `--help` and the dev runbook). With suppression on, behaviour matches today's `run all`.
+5. `docs/dev-runbook.md` reflects both changes (sample `status` output updated; auto-open behaviour and suppression documented).
+6. No regression in `./scripts/numio-dev.sh status`, `run all`, `stop all`, `restart`, `health`. Existing fields (`project=`, port values) remain present so anyone parsing the line by `grep` still works, or the parsing contract is explicitly documented as changed.
+
+## Quality gates
+
+- Run `./scripts/numio-dev.sh status` in a fresh worktree and visually confirm URLs render correctly. Click the printed frontend URL — the UI loads.
+- Run `./scripts/numio-dev.sh run all` from a stopped state and confirm the browser opens to the frontend URL after readiness. Confirm it does **not** open when invoked with the suppression flag/env var.
+- Force a failure (e.g. occupy the backend port) and confirm the browser does not open and the error path is unchanged.
+- `./scripts/numio-dev.sh health` still returns OK after `run all`.
+- Documentation diff in `docs/dev-runbook.md` matches the new behaviour.
+
+## Constraints and assumptions
+
+- macOS-first; non-macOS hosts must not error — degrade to printing the URL.
+- Keep the change to `scripts/tools/dev.sh` (the actual implementation file behind `numio-dev.sh`).
+- Per `.claude/rules/first-principles.md`: keep it simple. No new dependencies, no new config files. A flag and an `open` call are enough.
+
+## Summary
+
+### Steps completed
+1. Reformatted the `dev_status` worktree-stack header in `scripts/tools/dev.sh` from a single inline line to one line per service. Each HTTP service now shows its full `http://localhost:<port>` URL; postgres/valkey show `localhost:<port>`. The legacy `name=port` tokens (`project=`, `backend=`, `frontend(dev)=`, `postgres=`, `valkey=`) are preserved so any scripts that grep them keep working.
+2. Added a `_open_frontend_url` helper in `scripts/tools/dev.sh` that polls the frontend URL with `curl` for up to ~10s, then on macOS invokes `open <url>`. Suppressed by `--no-browser`, `NUMIO_NO_BROWSER=1`, `CI`, or a non-TTY stdout. If the readiness poll times out, the browser is **not** opened — the URL is logged with a `WARN`.
+3. `dev_run` now parses `--no-browser` before component validation and calls the helper at the end of the multi-component background path whenever frontend is in the started set.
+4. Updated `usage()` in `scripts/numio-dev.sh` to document `--no-browser`.
+5. Updated `docs/dev-runbook.md`: refreshed the `status` sample output to include the new header, and added a note under "Start everything at once" describing the auto-open behaviour and suppression knobs.
+
+### Changes made
+- `scripts/tools/dev.sh` — new `_open_frontend_url` helper; `dev_run` flag parsing + invocation; `dev_status` header reformat.
+- `scripts/numio-dev.sh` — usage text expanded for `run`.
+- `docs/dev-runbook.md` — sample status output and start-everything note updated.
+
+### Notable decisions or deviations
+- Suppression is layered: explicit flag (`--no-browser`), env var (`NUMIO_NO_BROWSER=1`), `CI` env var, and non-TTY stdout all skip the open. Non-TTY is the conservative default — invoking from CI, agent harnesses, or pipelines never launches a browser.
+- Failure handling: if the readiness poll times out, we explicitly skip `open` and emit a warning. Initial implementation would still call `open` on macOS regardless of poll result; tightened during testing to satisfy acceptance criterion 3.
+- macOS-only `open` per the task's macOS-first constraint. On non-Darwin hosts the helper falls back to logging the URL — no error.
+
+### Verification
+All six acceptance criteria validated end-to-end:
+- AC1 — `status` URL rendering: live `./scripts/numio-dev.sh status` run.
+- AC2 — Browser open on success: `script -q /dev/null ./scripts/numio-dev.sh run all` (pty so TTY guard passes); observed `Opening http://localhost:<port> in your browser...`.
+- AC3 — Browser **not** opened on failure: synthetic invocation with `FRONTEND_DEV_PORT=1`; observed the `WARN` and no `open` call.
+- AC4 — Suppression: `./scripts/numio-dev.sh run all --no-browser` and the non-TTY default both took the `Frontend URL:` branch.
+- AC5 — Docs updated under "Daily Workflow → Check status" and "Start everything at once".
+- AC6 — No regression: `name=port` tokens preserved; `bash -n` clean on both scripts; other commands untouched.

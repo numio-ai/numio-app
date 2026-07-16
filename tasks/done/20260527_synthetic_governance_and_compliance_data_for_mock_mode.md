@@ -1,0 +1,78 @@
+---
+status: done
+kind: task
+feature: mock_backend_switch
+title: Synthetic governance and compliance data for mock mode
+---
+
+# Synthetic governance and compliance data for mock mode
+
+# Synthetic governance and compliance data for mock mode
+
+## Problem statement
+
+The `mock_backend_switch` feature runs the full Numio UI from synthetic data with no backend, for customer demos. The governance and compliance screens — tag governance, compliance, findings, recommendations, infrastructure policies, resource inventory — need plausible synthetic data that reconciles with the rest of the demo. Today's mock files (`mockTagManagement.js`, `mockPolicies.js`, `mockRecommendations.js`, `mockResources.js`) each define their own ad-hoc entities with incompatible ID schemes, so a resource flagged on one screen does not match the same resource on another. This task produces a consistent governance/compliance dataset built on the shared canonical entities from `synthetic_data_core`.
+
+## Scope
+
+In scope — synthetic data, in `frontend/src/mocks/`, matching the response shapes returned by `frontend/src/api/tagGovernance.js` and `frontend/src/api/dashboard.js`, for these six surface areas:
+
+1. Tag governance — tag policies, campaigns, compliance summary / by-dimension / trend, non-compliant list, AWS Org tag-policy view, schema conflicts, tag-apply preview.
+2. Compliance — summary and non-compliant resources (the `dashboard.js` compliance surface).
+3. Findings — list, detail, transition history.
+4. Recommendations and savings — list, detail, savings summary, savings timeline.
+5. Infrastructure policies — list, detail with violations.
+6. Cloud resource inventory — the resource-list shape.
+
+Data is built on the canonical AWS accounts, services, regions, and resources from `synthetic_data_core` and inherits its seeding.
+
+Out of scope (sibling tasks): the mock/live switch and data seam (`switch_dispatch_seam`); the shared canonical entities, generator, and consistency harness (`synthetic_data_core`); the cost and platform domain datasets; wiring data into API modules (`endpoint_coverage`); tests; docs. This task does NOT edit `frontend/src/api/`.
+
+## Acceptance criteria
+
+1. Each of the six surface areas above has synthetic data whose shape matches what the corresponding `tagGovernance.js` / `dashboard.js` function returns.
+2. Every governance/compliance entity that references a resource, account, service, or region uses identifiers from the `synthetic_data_core` canonical set — no locally invented entity IDs.
+3. Cross-domain consistency holds and is checkable via the core harness: a resource flagged non-compliant appears in the inventory; a recommendation's affected/target resources reference inventory resource IDs; a policy violation references a resource that exists in the inventory; recommendation savings entries sum to the savings-summary totals.
+4. Savings figures and non-compliant aggregate costs are plausible relative to the canonical resources' costs (a recommendation's monthly saving does not exceed the referenced resource's monthly spend).
+5. Data is deterministic: two generation runs produce identical output (inherited from the core seed).
+
+## Quality gates
+
+- `cd frontend && npm test` passes.
+- `cd frontend && npm run build` succeeds.
+- Consistency check via the `synthetic_data_core` harness: flagged resources, recommendations, and policy violations reference canonical entities and reconcile across domains (criteria 2 and 3).
+- Determinism check: two runs produce byte-identical generated data.
+- No lint gate — the frontend has no lint script.
+
+## Constraints and assumptions
+
+- Depends on `synthetic_data_core`. That task owns the canonical AWS accounts, services, regions, resource IDs, and the seed; this task consumes them and does not redefine them.
+- Data authority for response shapes is the live `frontend/src/api/tagGovernance.js` (23 functions) and `frontend/src/api/dashboard.js`. Match what those functions return.
+- Existing mock files (`frontend/src/mocks/mockTagManagement.js`, `mockPolicies.js`, `mockRecommendations.js`, `mockResources.js`) are reference-only for vocabulary and patterns. They are not entity authorities; their ad-hoc entity IDs are superseded by the canonical set.
+- `numio-demo` is reference-only. No runtime dependency on it.
+- This task produces governance/compliance data only; it does not edit `frontend/src/api/`.
+
+## Summary
+
+### Steps completed
+1. Cataloged exact response shapes (read-only sub-agent) for the 16 `tagGovernance.js` functions + the governance/compliance/findings/recommendations/infra-policies/resources functions in `dashboard.js`. Found two dead endpoints with no backend contract (`POST /tag-policies/preview`, `GET /findings/summary`) — not mocked here.
+2. Built `frontend/src/mocks/synthetic/governance.js`: one canonical **resource inventory** (14 resources, sourced from core accounts/services/regions), then every governance surface references it — findings (8), recommendations (6), infra policies (4, with violations), compliance summary / by-dimension / trend / non-compliant, tag policies, campaigns, AWS Org tag policy, schema conflicts, and tag-apply preview.
+3. Matched the per-surface wrappers (`{resources,count}`, `{findings,count}`, `{policies,count}`, `{recommendations,count}`, `{results,count,total_non_compliant_cost}`, `{entries}`) and Decimal-as-string vs float distinctions (`CloudResource.cost` and `AffectedResource.monthly_cost` are floats).
+
+### Changes made
+- New: `frontend/src/mocks/synthetic/governance.js` + `governance.test.js` (15 tests). Imports only `synthetic/entities` + `synthetic/seed`. No `frontend/src/api/` edits. Legacy `mockTagManagement.js`/`mockPolicies.js`/`mockRecommendations.js`/`mockResources.js` left untouched (reference-only; canonical inventory supersedes their ad-hoc IDs).
+
+### Verification (all quality gates pass)
+- `npm test`: 433 passed / 43 files (+15 governance tests; no regressions).
+- `npm run build`: succeeds.
+- Cross-domain integrity (AC3): every finding, recommendation, and policy violation references an inventory provider `resource_id`; non-compliant results reference inventory UUIDs; recommendation savings sum exactly to the savings-summary totals (per-category and overall); savings-timeline cumulative ends at total actual savings.
+- Plausibility (AC4): each recommendation's monthly saving ≤ its resource's monthly cost; compliance counts internally consistent.
+- Canonical references (AC2): every resource/score references only canonical accounts, services, regions.
+- Determinism (AC5): combined governance output byte-identical across two runs.
+
+### Notable decisions / deviations
+- The task constraint says core "owns … resource IDs," but core (per spec §5.1) defines only accounts/services/regions/window. Resources are governance-internal, so this task owns the canonical resource inventory, built entirely from core's accounts/services/regions. This satisfies AC2/AC3 without modifying the committed core. Flagged here rather than escalated because the resolution is unambiguous and spec-faithful (spec §5.4.4 places the inventory in the governance domain).
+- Savings summary/timeline are derived by aggregating the recommendation list, so they reconcile by construction rather than being authored separately.
+
+### Links
+- Spec: `docs/frontend/mock-backend-spec.md` §5.2, §5.4. Branch: `feature/mock_backend_switch`. Depends on: `synthetic_data_core` (done).

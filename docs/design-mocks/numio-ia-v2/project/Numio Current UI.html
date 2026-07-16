@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Numio · current UI baseline</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  html, body { margin: 0; padding: 0; background: oklch(0.94 0.005 95); font-family: Inter, system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+  * { box-sizing: border-box; }
+  button { font-family: inherit; cursor: pointer; }
+  a { cursor: pointer; }
+  code { font-family: 'JetBrains Mono', ui-monospace, monospace; }
+</style>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel" src="design-canvas.jsx"></script>
+<script type="text/babel" src="tweaks-panel.jsx"></script>
+<script type="text/babel" src="numio-shell.jsx"></script>
+<script type="text/babel" src="page-overview.jsx"></script>
+<script type="text/babel" src="page-cloud-usage.jsx"></script>
+<script type="text/babel" src="page-feed.jsx"></script>
+<script type="text/babel" src="page-resources.jsx"></script>
+<script type="text/babel" src="page-zombie-hunter.jsx"></script>
+<script type="text/babel" src="page-tag-governance.jsx"></script>
+<script type="text/babel" src="page-ingestion.jsx"></script>
+
+<script type="text/babel">
+const { useState: useStateApp } = React;
+
+const DEFAULTS = /*EDITMODE-BEGIN*/{
+  "showChat": true
+}/*EDITMODE-END*/;
+
+// Wrap each page in the real Numio shell. Sized to the artboard
+// width/height the canvas card declares.
+function Framed({ activePage, children, showChat }) {
+  return (
+    <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column" }}>
+      <NumioShell activePage={activePage} chatCollapsed={!showChat} chatConversation="default">
+        <div style={{ flex: 1, overflow: "auto" }}>
+          {children}
+        </div>
+      </NumioShell>
+    </div>
+  );
+}
+
+function App() {
+  const [tweaks, setTweak] = useTweaks(DEFAULTS);
+
+  return (
+    <>
+      <DesignCanvas
+        title="Numio · current UI baseline"
+        subtitle="Faithful reproduction of the pages currently shipped in numio-app/frontend. Use as a baseline for upcoming UX work."
+      >
+        <DCSection id="primary" title="Primary surfaces">
+          <DCArtboard id="overview" label="Overview · /overview" width={1440} height={900}>
+            <Framed activePage="overview" showChat={tweaks.showChat}>
+              <OverviewPage />
+            </Framed>
+          </DCArtboard>
+
+          <DCArtboard id="cloud-usage" label="Cloud Usage · /cloud-usage" width={1440} height={900}>
+            <Framed activePage="cloud-usage" showChat={tweaks.showChat}>
+              <CloudUsagePage />
+            </Framed>
+          </DCArtboard>
+
+          <DCArtboard id="feed" label="Feed · /feed" width={1440} height={900}>
+            <Framed activePage="feed" showChat={tweaks.showChat}>
+              <FeedPage />
+            </Framed>
+          </DCArtboard>
+        </DCSection>
+
+        <DCSection id="inventory" title="Inventory &amp; governance">
+          <DCArtboard id="resources" label="Resources · /resources" width={1440} height={900}>
+            <Framed activePage="resources" showChat={tweaks.showChat}>
+              <ResourcesPage />
+            </Framed>
+          </DCArtboard>
+
+          <DCArtboard id="tag-governance" label="Tag Governance · /tag-governance" width={1440} height={900}>
+            <Framed activePage="tag-governance" showChat={tweaks.showChat}>
+              <TagGovernancePage />
+            </Framed>
+          </DCArtboard>
+
+          <DCArtboard id="zombie-hunter" label="Zombie Hunter · /zombie-hunter" width={1440} height={900}>
+            <Framed activePage="zombie" showChat={tweaks.showChat}>
+              <ZombieHunterPage />
+            </Framed>
+          </DCArtboard>
+        </DCSection>
+
+        <DCSection id="ops" title="Operations">
+          <DCArtboard id="ingestion" label="Data Ingestion · /ingestion" width={1440} height={900}>
+            <Framed activePage="ingestion" showChat={tweaks.showChat}>
+              <IngestionPage />
+            </Framed>
+          </DCArtboard>
+        </DCSection>
+      </DesignCanvas>
+
+      <TweaksPanel title="Tweaks">
+        <TweakSection title="Chrome">
+          <TweakToggle
+            label="Show chat rail"
+            value={tweaks.showChat}
+            onChange={v => setTweak("showChat", v)}
+          />
+        </TweakSection>
+      </TweaksPanel>
+    </>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>

@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Numio">
+  <defs>
+    <linearGradient id="numioG10" x1="8" y1="8" x2="56" y2="56" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#1173d4"/>
+      <stop offset="1" stop-color="#0d5ba8"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Rounded Square Background (like v4) -->
+  <rect x="8" y="8" width="48" height="48" rx="12" fill="url(#numioG10)"/>
+
+  <!-- Financial Pulse / Monitoring Graph -->
+  <path d="M 16 32 L 24 32 L 30 20 L 38 44 L 44 32 L 48 32" 
+        fill="none" 
+        stroke="#ffffff" 
+        stroke-width="4" 
+        stroke-linecap="round" 
+        stroke-linejoin="round"/>
+        
+  <!-- "Active" status dot -->
+  <circle cx="48" cy="20" r="3" fill="#ffffff"/>
+</svg>
+

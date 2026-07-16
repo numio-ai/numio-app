@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Numio · FinOps dashboard explorations</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  html, body { margin: 0; padding: 0; background: oklch(0.94 0.005 95); font-family: Inter, system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+  * { box-sizing: border-box; }
+  button { font-family: inherit; }
+</style>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel" src="design-canvas.jsx"></script>
+<script type="text/babel" src="tweaks-panel.jsx"></script>
+<script type="text/babel" src="shared.jsx"></script>
+<script type="text/babel" src="direction-a.jsx"></script>
+<script type="text/babel" src="direction-b.jsx"></script>
+<script type="text/babel" src="data-explorer.jsx"></script>
+
+<script type="text/babel">
+const { useState } = React;
+
+const DEFAULTS = /*EDITMODE-BEGIN*/{
+  "dark": false,
+  "density": "compact",
+  "accentHue": 255,
+  "agentPresence": "drawer"
+}/*EDITMODE-END*/;
+
+function App() {
+  const [tweaks, setTweak] = useTweaks(DEFAULTS);
+
+  return (
+    <>
+      <DesignCanvas title="Numio · main dashboard" subtitle="Two directions exploring how the agent's reasoning surfaces inside a FinOps cost overview.">
+        <DCSection id="directions" title="Directions">
+          <DCArtboard id="a" label="A · Cost-first with co-pilot drawer" width={1440} height={1040}>
+            <DirectionA tweaks={tweaks} />
+          </DCArtboard>
+          <DCArtboard id="b" label="B · Agent-first activity stream" width={1440} height={1040}>
+            <DirectionB tweaks={tweaks} />
+          </DCArtboard>
+        </DCSection>
+        <DCSection id="admin" title="Admin tools">
+          <DCArtboard id="data-explorer" label="Data Explorer · admin SQL workbench" width={1440} height={1040}>
+            <DataExplorer tweaks={tweaks} />
+          </DCArtboard>
+        </DCSection>
+      </DesignCanvas>
+
+      <TweaksPanel title="Tweaks">
+        <TweakSection title="Theme">
+          <TweakToggle label="Dark mode" value={tweaks.dark} onChange={v => setTweak("dark", v)} />
+          <TweakRadio label="Density" value={tweaks.density} options={[{value:"compact",label:"Compact"},{value:"comfortable",label:"Comfortable"}]} onChange={v => setTweak("density", v)} />
+          <TweakSlider label="Accent hue" value={tweaks.accentHue} min={0} max={360} step={5} onChange={v => setTweak("accentHue", v)} />
+        </TweakSection>
+        <TweakSection title="Direction A">
+          <TweakRadio label="Co-pilot drawer" value={tweaks.agentPresence} options={[{value:"drawer",label:"Open"},{value:"hidden",label:"Collapsed"}]} onChange={v => setTweak("agentPresence", v)} />
+        </TweakSection>
+      </TweaksPanel>
+    </>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>

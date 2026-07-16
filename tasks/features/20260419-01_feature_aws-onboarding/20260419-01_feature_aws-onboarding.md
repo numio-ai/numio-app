@@ -1,0 +1,146 @@
+---
+status: active
+slug: aws_onboarding_ux_redesign
+title: AWS account onboarding UX redesign
+---
+
+# AWS account onboarding UX redesign
+
+## Problem statement
+
+A timed user test on 2026-04-19 surfaced that the current **Settings → Integrations → Add Account** flow blocks non-technical users. The test subject — AWS-console admin on a single account, no CLI, unfamiliar with IAM, S3 bucket policies, or CUR — could not complete setup without live assistance.
+
+Observed frictions:
+- The form asks for Access Key ID, Secret, Role ARN, External ID, CUR bucket, prefix, and report name with no in-app explanation of where any value comes from.
+- Prerequisites (IAM policy, role, trust policy, service user, CUR export) are in `docs/user-guide.md`, but the user never opened the doc.
+- The user is unwilling to navigate between multiple AWS Console screens to assemble prerequisites.
+
+## Objective
+
+A non-technical AWS admin connects their first AWS account to Numio end-to-end inside the Numio UI, without reading external docs and without multi-screen AWS Console work. Technical admins keep a faster raw-field path.
+
+## Acceptance criteria
+
+- A user with no prior IAM/S3/CUR knowledge connects their first AWS account using only the Numio UI.
+- At least two onboarding methods are selectable: **Guided** (default) and **Advanced** (current raw form). A third method (**Chat**) is selectable when its feature flag is on.
+- The Guided method generates a per-tenant CloudFormation template that creates all AWS-side prerequisites in a single applied stack.
+- Post-apply validation renders per-step pass/fail inside Numio. No need to read logs or external docs.
+- `docs/user-guide.md` is not referenced by any step of the Guided or Chat happy paths.
+
+## Scope
+
+In scope:
+- Guided CloudFormation method with in-app explanations, one-click Launch URL, and downloadable template.
+- Per-tenant CFN template generator (backend).
+- Chat-driven onboarding v0 — scripted, feature-flagged.
+- Advanced (raw form) method retained and repositioned.
+
+Out of scope (deferred):
+- Terraform template generation — hub is designed to accept it later without redesign.
+- Chat v1 (Claude-grounded natural conversation) — filed as a follow-up task after v0 user feedback ships.
+- AWS Organizations, multi-account discovery, cross-region setup.
+
+## Requirements
+
+- **R1. Multi-method onboarding hub** — Add Account surface offers Guided (default), Chat (flagged), Advanced. Method selection is visible and reversible. Architected so a Terraform method can be added without redesigning the hub.
+- **R2. In-app completeness** — every prerequisite, field meaning, and recovery step needed for Guided and Chat happy paths appears in Numio UI.
+- **R3. CFN tenant artifact** — the backend generates a per-tenant CFN template, embeds the workspace's external ID, and returns both a one-click AWS-Console Launch URL and a downloadable file.
+- **R4. Inline verification** — after stack apply, Numio runs connection + role-assume + S3 checks and renders per-step pass/fail in the current method's UI.
+- **R5. Advanced preserved** — the current raw-field form remains functional, unchanged field-wise, and reachable via a secondary entry on the hub.
+- **R6. Chat v0 scripted** — the Chat method hosts a hardcoded script in the Numio chat panel and is gated by a feature flag, off by default in production.
+
+## Risks and mitigations
+
+- **CFN drift vs IAM/CUR reality.** Mitigation: one integration test applies the template in a test account and runs full ingestion end-to-end.
+- **One-click Launch URL breaks after AWS Console changes.** Mitigation: download path is always available; monitor launch URL for non-2xx responses.
+- **Scripted chat feels like a form in chat clothing.** Mitigation: keep v0 intentionally minimal; gather test feedback before investing in v1.
+- **Method picker adds a click without reducing work.** Mitigation: Guided visually dominant; Advanced via secondary link; avoid equal-weight sibling cards.
+
+## Success metrics
+
+- Non-technical user completes first-account onboarding unassisted in under 15 minutes (timed usability test).
+- Zero opens of `docs/user-guide.md` during a timed user-test session on the Guided path.
+- Guided-path verification succeeds on first attempt in at least 80% of runs.
+
+## Summary
+
+### Member tasks (all closed)
+1. `aws_cfn_template_generator` — backend CloudFormation template generator + 3 admin-only API endpoints (template, download, features).
+2. `aws_onboarding_method_hub` — frontend method picker (Guided primary, Chat flagged, Advanced secondary text link); feature-flag fetch on mount.
+3. `aws_onboarding_advanced_preserved` — extended `AccountFormDialog` with subtitle + Back-to-Guided; raw form fields unchanged.
+4. `aws_guided_cfn_wizard` — six-step wizard (intro → customize → apply → waiting → verify → success); reuses `registerAccount` + `triggerJob`.
+5. `aws_onboarding_chat_v0` — scripted chat-shaped flow; same CFN + verify path; flag-gated via `ONBOARDING_CHAT_ENABLED`.
+
+### Acceptance criteria status
+- **"A user with no prior IAM/S3/CUR knowledge connects their first AWS account using only the Numio UI."** — Happy path implemented end-to-end. **Needs a human usability walkthrough** to close this as observed (no autonomous AWS console).
+- **"At least two methods — Guided default, Advanced; Chat when flag on."** ✅ Method hub renders all three with the correct visual hierarchy.
+- **"Guided method generates a per-tenant CloudFormation template that creates all AWS-side prerequisites in a single applied stack."** ✅ Template passes `cfn-lint` (0 errors). **Stack apply in a real AWS account still needs a human operator to verify end-to-end** (see deviations below).
+- **"Post-apply validation renders per-step pass/fail inside Numio."** ✅ Both Guided (verify step) and Chat (verify turn) render `validation.steps[]` inline.
+- **"`docs/user-guide.md` is not referenced by any step of the Guided or Chat happy paths."** ✅ No outbound links to user-guide.md; in-app copy is self-contained.
+
+### Notable deviations (carry-over from task summaries)
+- **Manual AWS apply unverified.** Every step in the generator → apply → verify path has unit + integration coverage, but the autonomous session has no AWS console access. A human FDE must apply the rendered template against AWS account `123456789012` (or any test account) and confirm end-to-end CUR ingestion.
+- **`design:*` skill reviews not run.** Copy and layout were implemented against the task prompts without a UX/design-critique pass. Recommended before first customer usage.
+- **Chat v0 is a standalone chat-shaped component, not an extension of `ChatPanel`.** Intentional isolation so Chat v1 (LLM-grounded) can migrate into the real panel without unwinding scripted logic.
+- **Usability walkthrough and success metrics are unmeasured.** Acceptance criterion "non-technical user completes unassisted in under 15 minutes" requires a timed session with a real user; not possible in this session.
+
+### Verification
+- Backend: **514 tests pass** (18 new onboarding tests). `cfn-lint` passes on the rendered template with 0 errors / 0 warnings.
+- Frontend: **165 tests pass** (34 new in `src/components/onboarding/`). Production build clean.
+- Docs: `docs/ops-runbook.md` updated with the two new env vars (`PUBLIC_BASE_URL`, `ONBOARDING_CHAT_ENABLED`). `deployment/localhost/.env.example` documents the local-dev default for the chat flag.
+
+### Start checklist for human testing
+
+Before starting the demo and opening the browser, confirm the AWS-side test account is suitable for a clean first-account onboarding run:
+
+- **AWS account access confirmed.** Tester can sign in to the target AWS account in the AWS Console and knows the AWS account ID they expect to onboard.
+- **Tester has sufficient AWS permissions.** Tester can create and update CloudFormation stacks, IAM roles and policies, S3 buckets and bucket policies, Cost and Usage Report / Data Export resources, and can read the stack events if apply fails.
+- **Test account is approved for mutation.** The account can safely receive Numio-created IAM, S3, and billing export resources during the test; it is not a production account unless the owner has explicitly approved this.
+- **No conflicting Numio resources already exist.** Remove or account for any prior Numio CloudFormation stacks, IAM roles, IAM policies, S3 buckets, CUR/Data Export definitions, external IDs, or manually created test artifacts from earlier onboarding attempts.
+- **No conflicting governance controls are expected.** Confirm AWS Organizations SCPs, permission boundaries, IAM guardrails, Control Tower policies, tag policies, or security tooling will not block CloudFormation, IAM, S3, or billing export creation.
+- **Billing data prerequisites are available.** The account has billing/CUR access enabled for the tester, and the tester can navigate to AWS Billing and Cost Management if the flow sends them there.
+- **Numio has no pre-existing account connection for this workspace.** Start from a workspace where Settings → Integrations has no already-registered AWS account for the same account ID, unless the test case is explicitly retry/update behavior.
+- **Demo environment is clean and reachable.** Backend, frontend, database, and worker are running per `docs/dev-runbook.md`; the tester can sign in to Numio or auth is intentionally disabled for the demo.
+- **Browser session is ready.** Use a clean or incognito browser session for Numio and AWS Console so cached users, stale AWS roles, extensions, or saved form values do not mask onboarding issues.
+- **Observation setup is ready.** Record start time, whether the tester opens external docs, every AWS/Numio error shown, and whether Guided verification succeeds without reading logs.
+
+Baseline happy-path test:
+
+1. Run the local demo stack.
+2. Open Numio in the browser.
+3. Navigate to Settings → Integrations.
+4. Start Add Account.
+5. Select the Guided method.
+6. Launch or download the generated CloudFormation template.
+7. Apply it in the target AWS account.
+8. Return to Numio and run verification.
+9. Confirm the account registers and initial ingestion can be triggered.
+
+### Follow-up work (recommended as separate tasks)
+- Human apply of the CFN template against a real test account + end-to-end CUR ingestion; attach the result to this feature's closeout if you want to re-open.
+- `design:design-critique` on the Guided wizard and Chat bubbles; `design:ux-copy` on the Advanced subtitle and Chat scripted lines.
+- Timed usability test with a non-technical AWS admin to measure the "under 15 minutes, no user-guide opens" metric.
+- Chat v1 — LLM-grounded onboarding migrated into the existing `ChatPanel` (separate feature).
+
+
+====================
+
+# Testing checklist
+
+## Before start - prerequisites
+
+- Admin access to AWS
+- IAM user: NumioServiceUser
+- IAM role: NumioCurReaderRole
+- IAM inline role policy: `NumioReadOnly` Attached inline to NumioCurReaderRole
+
+Console checklist
+
+- CloudFormation, region `us-east-1`: look for `numio-onboarding` and `ConnectToNumio`.
+- IAM → Users: look for `NumioServiceUser`, `NumioServiceUserCfn`.
+- IAM → Roles: look for `NumioCurReaderRole`, `NumioCurReaderRoleCfn`. Manual: `NumioCURReadRole`
+- Inside those roles: check
+    - Generated: Customer managed `NumioCurReaderPolicy` policy
+    - Manual: customer inline `NumioCURReadRole-S3Read` policy
+- S3: search buckets named `numio-cur-data-export` or `numio-cur-*`.
+- Billing → Data Exports or Cost & Usage Reports: look for report `numio-cur-data-export-hourly` or similar `Numio` test names.

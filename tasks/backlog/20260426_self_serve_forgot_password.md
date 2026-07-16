@@ -1,0 +1,34 @@
+---
+status: backlog
+kind: task
+feature: user_management_extensions
+title: Self-serve forgot-password flow
+---
+
+# Self-serve forgot-password flow
+
+## Problem statement
+
+Phase 1 requires admin-issued reset links. Larger tenants want self-service password reset without contacting an admin.
+
+## Scope
+
+In scope:
+- `/forgot-password` route on the frontend.
+- Backend issues a reset token via SMTP (depends on `smtp_email_delivery`).
+- Reset link reuses the existing setup-link flow.
+- Enumeration resistance — same response whether the email exists or not.
+
+Out of scope:
+- SMS or magic-link delivery.
+
+## Acceptance criteria
+
+- User submits email; if the account exists, an email is sent.
+- Response wording does not reveal whether the email is registered.
+- Reset link works exactly like an admin-issued setup link.
+
+## Quality gates
+
+- Tests for enumeration resistance (timing-safe response equivalence).
+- Tests for happy-path reset.

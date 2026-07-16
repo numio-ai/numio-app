@@ -1,0 +1,44 @@
+---
+status: backlog
+kind: task
+feature: ia_v2_persistence
+title: Persist Saved Views (CRUD + ownership)
+---
+
+# Persist Saved Views (CRUD + ownership)
+
+## Problem statement
+
+`api/ia_v2_saved_views.py` returns canned views from `_seed_views_for`; no rows are persisted. Multiple IA v2 pages (Usage, Resources, Recommendations, Autopilot, TagGovernance, Budgets, Policies) need real saved-view CRUD with workspace + owner semantics. After this task, all 7 ViewsPickers read/write through the backend.
+
+## Scope
+
+In scope:
+- Alembic migration: `saved_views(id, workspace_id, owner_user_id, scope, name, query_json JSONB, default_for_owner bool, shared_at_workspace bool, created_at, updated_at)` with index on `(workspace_id, scope)`.
+- SQLAlchemy model + `SavedViewRepository`.
+- Implement all 5 endpoints with real persistence (GET, POST, PATCH, DELETE, POST set-default).
+- AuthZ: GET returns caller's owned + workspace-shared; POST sets `owner_user_id` from caller; PATCH and DELETE require `owner_user_id == caller.id` else 403; `set-default` clears any other default-for-owner row in the same scope.
+- Frontend: every page's ViewsPicker stops importing `*MockData` view lists; uses `fetch('/api/v1/saved-views?scope=...')` via a shared `useSavedViews(scope)` hook in `frontend/src/hooks/`.
+
+Out of scope:
+- View versioning, history, audit log entries on view edits.
+- Sharing tiers beyond `shared_at_workspace`.
+- Migration of existing user view selections (none exist — frontend store was local-only).
+
+## Acceptance criteria
+
+A1. Alembic migration applies cleanly; `set-default` is atomic (only one row per `(owner, scope)` carries `default_for_owner=true`).
+
+A2. AuthZ: non-owner DELETE returns 403; non-owner PATCH on a workspace-shared view returns 403; non-shared view from another owner is not returned by GET.
+
+A3. Pytest: full CRUD round-trip; ownership enforcement; set-default idempotency; cross-workspace isolation.
+
+A4. Frontend `useSavedViews(scope)` hook lives in `frontend/src/hooks/`. Every ViewsPicker imports from it. `*MockData.js` files no longer export saved-view fixtures.
+
+A5. Manual smoke on every page: open ViewsPicker, save a new view, refresh page, view is still there.
+
+## Quality gates
+
+- Backend pytest covers ownership matrix; alembic migration idempotent.
+- Frontend `npm test` passes.
+- `git grep -F 'SAVED_VIEWS' frontend/src/pages/` returns zero hits (no inline view fixtures remain).

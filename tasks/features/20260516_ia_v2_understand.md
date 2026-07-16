@@ -1,0 +1,111 @@
+---
+status: done
+slug: ia_v2_understand
+title: Numio IA v2 — Understand surfaces (Usage, Resources)
+---
+
+# Numio IA v2 — Understand surfaces (Usage, Resources)
+
+# Numio IA v2 — Understand surfaces (Usage, Resources)
+
+## Problem statement
+
+Numio today renders Cloud Usage and AI Usage as two structurally identical pages, and a Resources page that is opinionated about columns ("state" doesn't apply to RDS, S3, Lambda), padded with 64px row heights that won't scale past a few hundred resources, and lacks any saved-view / share-by-URL story. Usage filtering ignores tags entirely — the most important way Numio users want to slice cost. The user's verbatim feedback on 2026-05-16: "currently UI only offers filtering by few dimensions, and these are not tied to tags. This is critical miss."
+
+## Objective
+
+A single Usage page where tags are first-class dimensions for grouping and filtering. A Resources page with dense rows, configurable columns (including any tag column), polymorphic State that respects per-service semantics, infinite scroll, and bulk-action affordances. Both pages share the same saved-views model with share-by-URL.
+
+## Scope
+
+In scope:
+- Unified Usage page replacing `CloudUsagePage` and `AIUsagePage`.
+- Resources page redesign replacing `ResourcesPage`.
+- Saved-views frontend hook + URL serialization (works against a frontend mock store; backend lands in `ia_v2_be_saved_views`).
+- Tag-as-dimension UI; tag schema source is the existing tag governance API or a frontend mock if the API isn't ready.
+
+Out of scope:
+- Per-resource detail page (separate future task).
+- Multi-tag group-by ("team + env") — flagged in chat 2026-05-16 as later work.
+- Secondary group-by / split-by.
+- Compare mode ("vs last 30d" overlay).
+- Backend persistence of saved views — `ia_v2_be_saved_views`.
+
+## Acceptance criteria
+
+A1. `/usage` is one page with Cloud and AI tabs. Each tab carries the same chrome: range selector, Group-by, filter chips, untagged-spend callout, chart, breakdown table.
+
+A2. Group-by exposes both Platform dimensions (Service, Account, Region, Provider, Resource type) and Tag dimensions (every tag key in the schema) in two labeled sections; tag dimensions get a `tag:` prefix.
+
+A3. Filter chips support both platform attributes and tag values. Tag chips are tinted to distinguish them from platform chips.
+
+A4. Selecting a range updates all dependent labels (chart title, delta caption, breakdown label) — no period label drifts.
+
+A5. "Untagged" is rendered in the chart and table as a first-class row/series; a callout above the chart shows total untagged spend when > 0 and links to Tag Governance.
+
+A6. Saved views on both pages are picker-driven (View picker · Share link · Save as…). Selecting a view sets URL params; the URL is shareable.
+
+A7. `/resources` rows are 36px tall by default; Compact / Comfortable density toggle bumps to 52px.
+
+A8. State column shows EC2 `running/stopped`, RDS `available`, EBS `in-use/unassociated`, EIP `unassociated`, others as appropriate; stateless services (S3, Lambda, EBS Snapshot) show `—`. Color reflects meaning (good=green, waste=orange) regardless of literal value.
+
+A9. The Columns picker lets the user add any tag from the schema as a column (`tag:env`, etc.). Always-shown columns (Name/ID, Service, Spend) cannot be removed.
+
+A10. Resources page scrolls infinitely; no pagination footer. "Back to top" affordance appears after scrolling > 1 viewport.
+
+A11. Selecting one or more rows in Resources triggers a bulk action bar with Apply tag · Hibernate · Send to Recommendations · Export selected · Clear.
+
+A12. Selecting a view on either page deep-links — copying the URL and opening it in a new tab restores the same filter + group-by + columns + range.
+
+## Tasks
+
+Execute in order:
+
+1. `ia_v2_usage` — unified Usage page (Cloud + AI tabs, tag-as-dimension, saved views, period-label propagation).
+2. `ia_v2_resources` — Resources page (dense, polymorphic columns, infinite scroll, bulk action bar, saved views).
+
+## Linked design mocks
+
+- `docs/design-mocks/numio-ia-v2/project/page-usage.jsx`
+- `docs/design-mocks/numio-ia-v2/project/page-resources.jsx`
+
+## Summary
+
+### Steps completed
+
+Both member tasks completed and merged:
+
+1. **`ia_v2_usage`** — new `/usage` page with Cloud/AI tabs, two-section Group-by picker (Platform · Tags), filter-chip row with tag visual distinction, untagged callout, inline chart card header (no KPI strip), ViewsPicker, and URL-driven state.
+2. **`ia_v2_resources`** — rewrote `/resources` from API-driven v1 to mock-data v2: dense 36px rows + Compact/Comfortable toggle, polymorphic State column, configurable Columns picker with tag-as-column support, search, bulk-select action bar, IntersectionObserver infinite scroll, saved views with URL serialization.
+
+### Changes made
+
+- New pages: `Usage/UsagePage.jsx`, `Usage/usageMockData.js`, `Usage/UsagePage.test.jsx`.
+- New page: `Resources/resourcesMockData.js`, `Resources/ResourcesPage.test.jsx` (and full rewrite of `Resources/ResourcesPage.jsx`).
+- New hook: `useUsageUrlState.js` — URL ↔ state for scope/range/groupBy/filters/view.
+- Modified: `App.jsx` — `/usage` lazy import + route.
+- Tests: 31 net new (+12 Usage, +19 Resources). Total: 279 / 279 passing.
+
+### Acceptance criteria status
+
+| AC | Status |
+|----|--------|
+| A1 — `/usage` is one page, Cloud + AI tabs | ✅ |
+| A2 — Group-by exposes Platform + Tags with `tag:` prefix | ✅ |
+| A3 — Filter chips support both platform + tag values; tag chips tinted | ✅ |
+| A4 — Range selector propagates to all dependent labels | ✅ |
+| A5 — Untagged callout above chart when sum > 0 | ✅ |
+| A6 — Saved views picker-driven; selecting writes URL | ✅ |
+| A7 — Resources rows 36px / 52px toggle | ✅ |
+| A8 — Polymorphic State column per service | ✅ |
+| A9 — Columns picker; always-shown cannot be removed; tag columns supported | ✅ |
+| A10 — Resources scrolls infinitely; "Back to top" after 1 viewport | ✅ |
+| A11 — Bulk-select action bar with all 5 actions + Clear | ✅ |
+| A12 — Selecting a view deep-links via URL params | ✅ |
+
+### Notable decisions or deviations
+
+- **Backend persistence stubs.** Saved views, tag schema, and resource inventory are all mock-data-only. Backend tasks `ia_v2_be_saved_views`, `ia_v2_be_tag_dimensions`, `ia_v2_be_resources_inventory` will replace the mock store without touching the URL contract.
+- **Old `/ai-usage` and `/cloud-usage` routes still serve `AIUsagePage` / `CloudUsagePage`.** Feature B introduces a parallel `/usage` page. The legacy pages remain reachable directly (no in-app link points to them — sidebar Usage points to `/usage`). A future cleanup task can remove `/ai-usage` and `/cloud-usage` once stakeholders sign off on the new Usage surface.
+- **Open-state picker designs deferred** for both Group-by and Filter pickers — buttons exist and dropdowns are functional for the basic flows (group-by selection, filter chip removal), but rich add-filter and multi-value selectors are out of scope per chat 2026-05-16.
+- **Resources page renders 1000 mock rows directly** — no virtualization. Acceptable for the mock; the backend cursor pagination task (`ia_v2_be_resources_inventory`) will introduce server-side pagination, and `react-virtual` can be slotted in later without breaking the UX.

@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Numio · Tag Governance — preview of impl code</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" />
+<style>
+  :root {
+    --bg-page: #f7f7f7;
+    --bg-surface: #ffffff;
+    --border: #efefef;
+    --text-primary: #111827;
+    --text-secondary: #374151;
+    --text-muted: #6b7280;
+    --text-xs-muted: #9ca3af;
+    --accent: #2563eb;
+    --success: #16a34a;
+    --success-bg: #f0fdf4;
+    --warning: #d97706;
+    --warning-bg: #fffbeb;
+    --danger: #dc2626;
+    --danger-bg: #fef2f2;
+    --ai-accent: #6366f1;
+    --ai-accent-light: #eef2ff;
+    --ai-accent-text: #4f46e5;
+  }
+  html, body, #root {
+    margin: 0; padding: 0; height: 100%;
+    background: var(--bg-page);
+    font-family: Inter, system-ui, sans-serif;
+    color: var(--text-primary);
+  }
+  *, *::before, *::after { box-sizing: border-box; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<!--
+  =================================================================
+  Smoke-test harness for the production-bound impl code.
+
+  This file loads the same .jsx files from numio-impl/ that you will
+  drop into your repo, and renders them in this preview using simple
+  shims for the real Numio runtime:
+    - react-router-dom  → fake useNavigate (no-op)
+    - components/ChatProvider → fake useChat that just console.logs
+    - context/AuthContext → fake useAuth returning role: admin
+
+  If this renders cleanly here, the same code will render cleanly in
+  your repo after you drop it in. Tail the browser console for any
+  errors.
+  =================================================================
+-->
+
+<script type="text/babel" data-presets="react">
+const { useState, useEffect, useMemo, useCallback, useRef } = React;
+
+// ------------ Shims for the production runtime ------------
+const shims = {
+  'react-router-dom': {
+    useNavigate: () => (path) => console.log('[shim] navigate →', path),
+  },
+  'components/ChatProvider': {
+    useChat: () => ({
+      openChat: (text) => {
+        console.log('[shim] openChat ←', JSON.stringify(text));
+        alert('Ask Numio called with:\n\n' + (text || '(empty)'));
+      },
+    }),
+  },
+  'context/AuthContext': {
+    useAuth: () => ({ user: { role: 'admin', name: 'James Chen' } }),
+  },
+  'lucide-react': null, // resolved below
+};
+
+// Inline lucide-react icons (only the ones the impl uses) as plain SVG.
+const iconPath = {
+  ChevronDown: 'M6 9l6 6 6-6',
+  ChevronRight: 'M9 18l6-6-6-6',
+  ChevronLeft: 'M15 18l-6-6 6-6',
+  X: 'M18 6L6 18M6 6l12 12',
+  Check: 'M20 6L9 17l-5-5',
+  AlertTriangle: 'M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0zM12 9v4M12 17h.01',
+  Sparkles: 'M12 3l1.6 4.3L18 9l-4.4 1.7L12 15l-1.6-4.3L6 9l4.4-1.7L12 3zM19 14l.8 2.2L22 17l-2.2.8L19 20l-.8-2.2L16 17l2.2-.8L19 14z',
+  Plus: 'M12 5v14M5 12h14',
+  ArrowRight: 'M5 12h14M12 5l7 7-7 7',
+  ExternalLink: 'M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3',
+  Shield: 'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z',
+  Cloud: 'M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z',
+  Edit2: 'M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z',
+};
+const mkIcon = (name) => ({ size = 16, color = 'currentColor', strokeWidth = 1.75, style }) =>
+  React.createElement('svg', {
+    width: size, height: size, viewBox: '0 0 24 24', fill: 'none',
+    stroke: color, strokeWidth, strokeLinecap: 'round', strokeLinejoin: 'round', style,
+  }, React.createElement('path', { d: iconPath[name] }));
+
+shims['lucide-react'] = Object.fromEntries(
+  Object.keys(iconPath).map(n => [n, mkIcon(n)])
+);
+
+// ------------ Tiny module loader ------------
+// Maps file path → module exports. require() resolves relative + shim paths.
+const modules = {};
+const resolveAlias = (from, to) => {
+  if (!to.startsWith('.')) return to; // bare specifier → shim
+  const parts = from.split('/').slice(0, -1);
+  for (const seg of to.split('/')) {
+    if (seg === '.') continue;
+    if (seg === '..') parts.pop();
+    else parts.push(seg);
+  }
+  return parts.join('/');
+};
+const requireShim = (from, spec) => {
+  // Resolve relative paths first
+  const resolved = spec.startsWith('.') ? resolveAlias(from, spec) : spec;
+
+  // Check already-loaded modules (with extension variants)
+  if (modules[resolved]) return modules[resolved];
+  if (modules[resolved + '.jsx']) return modules[resolved + '.jsx'];
+  if (modules[resolved + '.js']) return modules[resolved + '.js'];
+
+  // Fall back to shims (match by full key or suffix)
+  for (const [k, v] of Object.entries(shims)) {
+    if (resolved === k || resolved.endsWith('/' + k) || k.endsWith('/' + resolved) || k.endsWith(resolved)) return v;
+  }
+
+  throw new Error(`No shim or module for "${resolved}" (from ${from})`);
+};
+
+// Rewrite a JSX source file so its imports/exports use our loader.
+function rewriteSource(src, filePath) {
+  let out = src;
+  // import X from 'spec'              → const X = __req('spec').default;
+  // import { A, B } from 'spec'        → const { A, B } = __req('spec');
+  // import { A as B } from 'spec'      → const { A: B } = __req('spec');
+  // import React, { useState } from 'react'  → const __r = __req(...);const React = __r.default;const { useState } = __r;
+  out = out.replace(/^import\s+React\s*,\s*\{([^}]+)\}\s+from\s+['"]react['"]\s*;?$/gm,
+    (_, named) => `const { ${named.trim()} } = React;`);
+  out = out.replace(/^import\s+React\s+from\s+['"]react['"]\s*;?$/gm, '');
+  out = out.replace(/^import\s+\{\s*([^}]+)\s*\}\s+from\s+['"]([^'"]+)['"]\s*;?$/gm,
+    (_, named, spec) => `const { ${named.trim()} } = __req(${JSON.stringify(spec)});`);
+  out = out.replace(/^import\s+(\w+)\s+from\s+['"]([^'"]+)['"]\s*;?$/gm,
+    (_, name, spec) => `const ${name} = __req(${JSON.stringify(spec)}).default;`);
+
+  // export default → module.exports.default =
+  out = out.replace(/export\s+default\s+function\s+(\w+)/g, 'module.exports.default = function $1');
+  out = out.replace(/export\s+default\s+/g, 'module.exports.default = ');
+  // export const|function|let X → wrap
+  out = out.replace(/export\s+(const|let|function)\s+(\w+)/g, (_, kw, name) => {
+    return `${kw} ${name}`;
+  });
+  // collect names exported and append assignments. Simpler: scan after first pass.
+  const exportedNames = new Set();
+  const named = src.matchAll(/export\s+(?:const|let|function|class)\s+(\w+)/g);
+  for (const m of named) exportedNames.add(m[1]);
+  if (exportedNames.size > 0) {
+    out += '\n' + [...exportedNames].map(n => `module.exports.${n} = ${n};`).join('\n');
+  }
+  return out;
+}
+
+async function loadFile(path) {
+  const src = await fetch(path).then(r => r.text());
+  const rewritten = rewriteSource(src, path);
+  // Transform with Babel and execute with our require
+  const code = Babel.transform(rewritten, { presets: ['react'] }).code;
+  const module = { exports: {} };
+  const __req = (spec) => requireShim(path, spec);
+  // eslint-disable-next-line no-new-func
+  new Function('module', '__req', 'React', code)(module, __req, React);
+  modules[path] = module.exports;
+  return module.exports;
+}
+
+// ------------ Load in dependency order, then render ------------
+(async () => {
+  try {
+    await loadFile('mocks/mockTagManagement.js');
+    await loadFile('pages/TagGovernance/styles.js');
+    await loadFile('pages/TagGovernance/components/tagPrimitives.jsx');
+    await loadFile('pages/TagGovernance/components/CellPopover.jsx');
+    await loadFile('pages/TagGovernance/components/ExpandedRow.jsx');
+    await loadFile('pages/TagGovernance/components/ResourcesTab.jsx');
+    await loadFile('pages/TagGovernance/components/SchemaTab.jsx');
+    await loadFile('pages/TagGovernance/components/RiskyWriteModal.jsx');
+    await loadFile('pages/TagGovernance/components/AwsOrgConflictModal.jsx');
+    const page = await loadFile('pages/TagGovernance/TagGovernancePage.jsx');
+    const TagGovernancePage = page.default;
+
+    // Fake the Numio app shell around it so the preview looks like the
+    // real product. (Real app uses OverviewLayout + SlimTopBar +
+    // OverviewSidebar — those aren't included in this drop.)
+    function Shell({ children }) {
+      return React.createElement('div', {
+        style: { display: 'flex', flexDirection: 'column', height: '100vh' },
+      },
+        // Slim top bar stub
+        React.createElement('header', {
+          style: {
+            height: 44, flexShrink: 0,
+            borderBottom: '1px solid #efefef',
+            display: 'flex', alignItems: 'center', padding: '0 16px',
+            background: '#fff', gap: 8,
+          },
+        },
+          React.createElement('div', {
+            style: { width: 20, height: 20, borderRadius: 5, background: '#111827',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: '#fff', fontSize: 11, fontWeight: 700 },
+          }, 'n'),
+          React.createElement('span', { style: { fontSize: 15, fontWeight: 600 } }, 'Numio'),
+          React.createElement('span', { style: { color: '#d1d5db' } }, '/'),
+          React.createElement('span', { style: { fontSize: 13, color: '#6b7280' } }, 'Tag Governance'),
+          React.createElement('div', { style: { flex: 1 } }),
+          React.createElement('span', {
+            style: { fontSize: 11, color: '#9ca3af', padding: '2px 8px',
+              border: '1px solid #efefef', borderRadius: 999 },
+          }, 'Preview · impl smoke test'),
+        ),
+        React.createElement('div', { style: { flex: 1, minHeight: 0 } }, children),
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(
+      React.createElement(Shell, null,
+        React.createElement(TagGovernancePage, null)
+      )
+    );
+  } catch (err) {
+    document.getElementById('root').innerHTML =
+      '<pre style="padding:20px;color:#dc2626;font-family:monospace;">' +
+      'Preview failed: ' + (err.stack || err.message) + '</pre>';
+    console.error(err);
+  }
+})();
+</script>
+</body>
+</html>

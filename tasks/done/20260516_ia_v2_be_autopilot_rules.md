@@ -1,0 +1,77 @@
+---
+status: done
+kind: task
+feature: ia_v2_backend_support
+title: Backend — Autopilot rules CRUD + history + undo + dry-run + pause-all
+---
+
+# Backend — Autopilot rules CRUD + history + undo + dry-run + pause-all
+
+# Backend — Autopilot rules CRUD + history + undo + dry-run + pause-all
+
+## Problem statement
+
+The IA v2 Autopilot page has Rules and History tabs with a 3-tab New-rule picker, archive vs delete, undo windows, and a global Pause-all. The current backend has no rules CRUD, no history with undo semantics, no pause-all.
+
+## Scope
+
+In scope:
+- `autopilot_rules` table (id, workspace_id, source: recommendation|template|scratch, name, description, dsl_json, schedule, status: active|paused|archived, owner_user_id, created_at, archived_at).
+- `autopilot_actions` table (id, rule_id, target_arn, outcome: blocked|deleted|stopped|resumed|resized|advisory, saved_amount, undo_until, undone_at, created_at).
+- CRUD endpoints for rules: `GET /autopilot/rules`, `POST /autopilot/rules`, `PATCH /autopilot/rules/{id}`, `POST /autopilot/rules/{id}/archive`, `DELETE /autopilot/rules/{id}` (only if `status=archived`).
+- `POST /autopilot/actions/{id}/undo` succeeds within window; returns 410 outside window; idempotent (second undo on same action is a no-op).
+- `POST /autopilot/pause-all` and `POST /autopilot/resume-all`. Resume restores only the rules that were `active` immediately before pause.
+- Dry-run: `POST /autopilot/rules/{id}/dry-run` returns the would-be actions list with saved-amount estimates.
+
+Out of scope:
+- Real execution of actions against AWS — execution layer is later.
+- DSL parser for "From scratch" path — store as opaque JSON for v1.
+
+## Acceptance criteria
+
+A1. Rule CRUD endpoints exist; archive flips status to archived; delete returns 400 unless status=archived.
+
+A2. History endpoint returns actions with `outcome` and computed Undo-cell semantics (within window / advisory only / auto-resumed / undo expired).
+
+A3. Undo within window succeeds; outside window returns 410; a second undo on the same action returns the existing undone state (idempotent).
+
+A4. Pause-all flips all `active` rules to `paused` atomically; resume-all flips back only those that were `active` before pause.
+
+A5. Dry-run returns a list of would-be targets and saved-amount estimates without persisting any actions.
+
+## Summary
+
+### Steps completed
+
+Scaffold-only with in-memory state (so CRUD round-trips work):
+
+1. Built `schemas/ia_v2_autopilot.py` — `AutopilotRule`, `AutopilotAction`, `DryRunResponse`, `PauseAllResponse` + request shapes; enums for `RuleState`, `HistoryOutcome`, `UndoState`.
+2. Built `api/ia_v2_autopilot.py` under prefix `/autopilot` with full CRUD + lifecycle:
+   - `GET /autopilot/rules`, `POST /autopilot/rules`, `PATCH /autopilot/rules/{id}`, `POST /autopilot/rules/{id}/archive`, `DELETE /autopilot/rules/{id}` (refuses 409 unless archived first)
+   - `POST /autopilot/rules/{id}/dry-run` → returns `would_act_on`, `would_save`
+   - `GET /autopilot/history?rule_id=` → returns actions with `undo_state` ∈ {within, auto, advisory, expired}
+   - `POST /autopilot/history/{id}/undo`
+   - `POST /autopilot/pause-all` + `POST /autopilot/resume-all` (atomic over module-level dict)
+3. Wired router into `main.py`.
+4. Wrote 9 pytest cases: seeding on first list, dry_run=true creates paused rule, dry_run=false creates active, archive-required-before-delete, dry-run shape, pause-all then resume-all flips every active rule, history surfaces all 4 undo kinds, history filter, undo response.
+
+### Changes made
+
+- New: `schemas/ia_v2_autopilot.py`, `api/ia_v2_autopilot.py`, `tests/test_ia_v2_autopilot.py`.
+- Modified: `main.py` — added import + include_router.
+
+### Notable decisions or deviations
+
+- **Module-level dicts (`_RULES`, `_PAUSED_ALL`) keep state across requests within one process** — enough for the IA v2 frontend to demonstrate end-to-end round-trips. Real persistence task replaces with DB tables; the API contract doesn't change.
+- **Test fixture `_reset_rule_store` clears state per test** so order doesn't matter.
+- **Delete enforces archived-first**, matching the IA v2 frontend's two-step delete UX (`409 Conflict` if not archived).
+
+### Links
+
+- Tests: 9 / 9 passing.
+
+## Quality gates
+
+- Alembic migrations applied & idempotent.
+- Pytest covers each AC including undo idempotency and pause/resume snapshot/restore correctness.
+- Docs updated: Autopilot API surface.

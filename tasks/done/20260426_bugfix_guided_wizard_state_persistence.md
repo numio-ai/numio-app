@@ -1,0 +1,127 @@
+---
+status: done
+kind: bug
+feature: bugfix_setup_wizard
+title: Persist Guided onboarding state server-side; remove side-exit hatches
+---
+
+# Persist Guided onboarding state server-side; remove side-exit hatches
+
+## Problem statement
+
+Once a user clicks through the Guided onboarding's Customize step, the wizard's state lives only in `useState` inside `Integrations.jsx`. Navigating to a different page, refreshing the browser, opening Numio on a second device, or clicking the wizard's "Back to methods" button on an intermediate step destroys that in-memory state. If the user has already deployed the CloudFormation stack in AWS, the AWS-side resources persist while Numio has no record. The user cannot resume the wizard, and the orphaned stack stays in the customer account.
+
+The fix is two-part:
+
+1. **Persist** the in-progress onboarding **server-side**, scoped to the workspace, so the wizard auto-restores from any browser at the saved step.
+2. **Close the side exits** so the only ways out of the wizard are (a) successful registration or (b) explicit cancel after the user confirms they have already deleted the CFN stack in the AWS Console.
+
+## Scope
+
+In:
+
+- **Backend** — new workspace-scoped resource for an in-progress Guided onboarding. CRUD over `/api/v1/onboarding/in-progress`. Persists only `workspace_id`, `label`, `step`, `created_at`, `updated_at`. The rendered template body is **not** persisted; it is re-derived on each visit from the persisted label plus the workspace `external_id`.
+- **Backend** — lifecycle:
+  - **Create** when the user submits Customize for the first time.
+  - **Update** when the wizard's step changes.
+  - **Delete** on successful account registration.
+  - **Delete** on explicit cancel after the user confirms in a modal that they have already deleted the CFN stack in AWS Console.
+- **Backend** — single in-progress wizard per workspace at a time. A second Customize submission updates the existing record rather than creating a parallel one.
+- **Frontend** — on Settings → Integrations mount, fetch any in-progress record for the current workspace; if present, auto-restore the wizard at that step.
+- **Frontend** — navigation refactor inside the Guided wizard:
+  - Remove "Back to methods" from Customize, Apply, Waiting, Verify steps.
+  - Keep an in-step "Back" that walks one step backward.
+  - On the Intro step, the "Back" button becomes "Back to methods".
+- **Frontend** — add an explicit "Cancel onboarding" affordance visible from Customize onward. Clicking it opens a modal that requires the user to acknowledge "I have deleted the CFN stack in AWS Console" before the Cancel action is enabled. Confirming Cancel deletes the in-progress record and returns to the methods hub.
+
+Out:
+
+- Persisting paste-back fields (AccessKeyId, SecretAccessKey, RoleArn, ExternalId, AwsAccountId). On resume, the user re-pastes from the AWS Console outputs.
+- Persisting the rendered template body.
+- Persisting wizard state for Advanced or Chat methods.
+- Multiple concurrent in-progress wizards per workspace.
+
+## Acceptance criteria
+
+1. After Customize submission, refreshing the browser restores the wizard at the same step with the same label.
+2. Opening Numio in a different browser as the same workspace admin restores the same wizard at the same step.
+3. Closing the browser tab does not lose state; the next visit to Settings → Integrations auto-restores the wizard.
+4. "Back to methods" button is absent from Customize, Apply, Waiting, and Verify steps. The in-step "Back" still walks one step backward.
+5. On the Intro step, the "Back" button reads "Back to methods" and returns to the method hub. No persistence happens before Customize is submitted.
+6. A "Cancel onboarding" button is visible from Customize onward and opens a confirmation modal. The Cancel action stays disabled until the user checks "I have deleted the CFN stack in AWS Console". Confirming deletes the in-progress record and dismisses the wizard.
+7. Successful registration deletes the in-progress record automatically.
+8. The persisted record contains exactly: `workspace_id`, `label`, `step`, `created_at`, `updated_at`.
+9. A second Customize submission for the same workspace updates the existing record (no orphans, no parallel records).
+10. Manual: complete Customize, refresh, confirm resume; complete Customize, switch browser, confirm resume; from Waiting step, click Cancel onboarding, confirm modal requires checkbox, confirm record deletion.
+
+## Quality gates
+
+- `cd backend && VIRTUAL_ENV=.venv uv run --active pytest` — full suite passes; new tests cover the in-progress endpoint's CRUD, single-record-per-workspace constraint, and lifecycle deletion on registration and cancel.
+- `cd backend && VIRTUAL_ENV=.venv uv run --active ruff check . && ruff format --check .` — clean.
+- `cd frontend && npm test` — full suite passes; new tests cover auto-restore on mount, removed "Back to methods" buttons on intermediate steps, the cancel confirmation modal, and the navigation model.
+- `docs/app/settings/integrations/aws-integration-spec.md` updated to describe the in-progress lifecycle, the navigation model, and the cancel-with-confirmation contract.
+
+## Constraints and assumptions
+
+- "Workspace admin" identity comes from `AuthenticatedUser`; the in-progress record is workspace-scoped and admin-only on read/write.
+- Alembic migration adds the table; a single in-progress record at a time per workspace (subsequent Customize submissions update the existing record).
+- Re-derivation of the template on resume requires only the persisted label and the workspace's `external_id`. CUR fields, when relevant, are user-pasted at the time of resume.
+- Local dev: `AUTH_ENABLED=false` means a single synthetic admin per workspace; the in-progress record is still scoped per workspace and works the same way.
+- Cleanup of stale records (e.g. user abandoned for 30 days) is out of scope here — file as a separate hygiene task if needed.
+
+## Summary
+
+### Steps completed
+
+1. Added a workspace-scoped `onboarding_in_progress` table (UNIQUE on `workspace_id`) with Alembic migration `e7f8a9b0c1d2`. Persisted columns: `label`, `step`, `created_at`, `updated_at` — paste-back fields and the rendered template body are intentionally **not** persisted, so resume requires the user to re-paste CFN Outputs.
+2. Added `OnboardingInProgressRepository` and three admin-only endpoints (`GET / PUT / DELETE /api/v1/onboarding/in-progress`) on the existing `numio.api.onboarding` router. PUT validates `label` via the existing `validate_label` helper and rejects any `step` outside `{customize, apply, waiting, verify}` with HTTP 422. DELETE is idempotent.
+3. Frontend: added three matching API client functions, auto-restore on Settings → Integrations mount (sets `addMethod="guided"` and seeds the wizard with the saved label + step), and an `initialStep` prop on `GuidedOnboarding`.
+4. Reworked the Guided wizard navigation to remove silent side exits:
+    - The top-right "Back to methods" button is gone.
+    - On Intro the in-step left-side button is "Back to methods" (calls `onBack` directly when no record exists; otherwise opens the cancel modal).
+    - On Customize / Apply / Waiting / Verify, a top-right "Cancel onboarding" button replaces it. In-step "← Back" buttons still walk one step backward.
+5. Added a Cancel-onboarding modal that requires the user to tick *I have deleted the CFN stack in AWS Console* before the confirm button enables. Confirming `DELETE`s the record and calls `onBack`.
+6. Wrapped step transitions in `goTo()` so `PUT` fires only once Customize is submitted (Customize → Apply is the first persistence point) and on every subsequent transition into a persisted step. `handleVerify` issues `DELETE` when validation flips to `connected` before transitioning to Success — best-effort with self-healing on next visit if the network drops.
+7. Updated `docs/app/settings/integrations/aws-integration-spec.md` § 2.2 with the in-progress lifecycle and navigation contract; § 2.6 lists the three new endpoints.
+8. New backend tests (`backend/tests/test_onboarding_in_progress.py`, 11 cases) cover GET-204, PUT create/update single-row-per-workspace, label validation, step validation, DELETE idempotency, workspace isolation, and the `UNIQUE(workspace_id)` constraint. Existing tests in `GuidedOnboarding.test.jsx` extended with persistence, navigation, cancel-modal, and auto-restore coverage; `onboardingFlow.test.jsx` updated for the removed top-right Back-to-methods.
+
+### Changes made
+
+Created:
+- `backend/alembic/versions/e7f8a9b0c1d2_add_onboarding_in_progress_table.py`
+- `backend/src/numio/models/onboarding_in_progress.py`
+- `backend/src/numio/db/onboarding_in_progress_repository.py`
+- `backend/tests/test_onboarding_in_progress.py`
+
+Edited:
+- `backend/src/numio/api/onboarding.py` — added GET / PUT / DELETE endpoints.
+- `backend/src/numio/models/__init__.py` — registered new model.
+- `frontend/src/api/onboarding.js` — added `getOnboardingInProgress`, `putOnboardingInProgress`, `deleteOnboardingInProgress`.
+- `frontend/src/pages/Settings/Integrations.jsx` — auto-restore on mount; passes `initialStep` to the wizard.
+- `frontend/src/components/onboarding/GuidedOnboarding.jsx` — `initialStep` prop, persistence on step changes, DELETE on success, Cancel-onboarding affordance + modal, navigation refactor.
+- `frontend/src/components/onboarding/GuidedOnboarding.test.jsx` — new tests for the above.
+- `frontend/src/components/onboarding/onboardingFlow.test.jsx` — updated mocks; rerouted one test through Intro since top-right Back-to-methods is gone.
+- `docs/app/settings/integrations/aws-integration-spec.md` — added persistence and navigation contract; new endpoints in §2.6.
+
+### Notable decisions or deviations
+
+- **Lifecycle is frontend-driven.** The accounts API is unchanged; the wizard issues `DELETE` on the connected-validation transition rather than embedding cleanup in `POST /accounts`. This keeps the new feature loosely coupled. Edge case: if the browser dies after a successful `POST /accounts` but before the `DELETE` lands, the next resume hits Verify, falls through to `updateAccount` (which re-validates), and tries the cleanup again — self-healing.
+- **First persistence point is Customize → Apply.** Per the task's "no persistence happens before Customize is submitted." Going Intro → Customize does not PUT; the first PUT fires when the user clicks **Generate template →**.
+- **In-step Back from Customize → Intro after persistence is allowed and does not delete.** The persisted record retains its last persisted step (Customize), so a refresh from Intro restores at Customize. Intro's Back-to-methods routes through the cancel modal once persistence exists.
+- **No backend cleanup of stale records.** Out of scope per the task; tracked separately if needed.
+
+### Verification
+
+- 560/560 backend tests pass; 11 new tests cover the in-progress endpoints and isolation.
+- 191/191 frontend tests pass across 23 files; new tests cover persistence, navigation, cancel modal, auto-restore.
+- `ruff check` + `ruff format --check` clean on all new/edited files.
+- `npm run build` succeeds.
+- Migration applies cleanly (`c0d1e2f3a4b5 → e7f8a9b0c1d2`).
+- Live smoke test against the running backend: PUT 200 → GET 200 → DELETE 204 → GET 204; bad label → 422; bad step → 422.
+
+The UI was validated through automated tests but not driven manually in a browser — the operator should walk the wizard end-to-end (Customize → Apply → refresh → Verify resume → Cancel modal → confirm) before accepting.
+
+### Links
+
+- Parent feature: `tasks/features/20260427_bugfix_setup_wizard.md`
+- PR / commits: pending

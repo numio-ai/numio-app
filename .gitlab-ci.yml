@@ -1,0 +1,116 @@
+# GitLab CI pipeline for building and publishing Numio container images
+# to the GitLab Container Registry.
+#
+# Destinations:
+#   registry.gitlab.com/numio-ai/numio-app/numio-srv
+#   registry.gitlab.com/numio-ai/numio-app/numio-ui
+#
+# Triggers and tags:
+#   - Push to default branch  -> :latest, :<short-sha>
+#   - Push of a tag vX.Y.Z    -> :X.Y.Z,  :<short-sha>
+#   - Merge requests          -> leak-guard only (no push)
+#
+# Auth: uses the built-in $CI_REGISTRY_USER / $CI_REGISTRY_PASSWORD tokens.
+# Public pull requires project + registry visibility set to Everyone under
+# Settings -> General -> Visibility, project features, permissions.
+
+stages:
+  - verify
+  - build
+
+variables:
+  IMAGE_SRV: "$CI_REGISTRY_IMAGE/numio-srv"
+  IMAGE_UI:  "$CI_REGISTRY_IMAGE/numio-ui"
+  DOCKER_HOST: tcp://docker:2375
+  DOCKER_TLS_CERTDIR: ""
+  DOCKER_DRIVER: overlay2
+
+# Fails the pipeline if any .env / .env.* file is present anywhere in the
+# repository at build time. Defense in depth against baking secrets into
+# a public image; .dockerignore is the primary guard.
+leak-guard:
+  stage: verify
+  image: alpine:3.19
+  script:
+    - |
+      echo "Scanning repository for .env-like files..."
+      LEAKS=$(find . -type f \( -name ".env" -o -name ".env.*" \) \
+        -not -path "./.git/*" \
+        -not -name ".env.example" || true)
+      if [ -n "$LEAKS" ]; then
+        echo "ERROR: .env-like files must not be committed or present at build time:"
+        echo "$LEAKS"
+        exit 1
+      fi
+      echo "OK — no .env leaks."
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/
+
+.build-template:
+  stage: build
+  image: docker:25
+  services:
+    - docker:25-dind
+  needs:
+    - leak-guard
+  before_script:
+    - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" "$CI_REGISTRY"
+    - |
+      if [ -n "$CI_COMMIT_TAG" ]; then
+        # Strip leading "v" from v1.2.3 -> 1.2.3
+        VERSION="${CI_COMMIT_TAG#v}"
+        PRIMARY_TAG="$VERSION"
+        SECONDARY_TAG="$CI_COMMIT_SHORT_SHA"
+        MOVING_TAG=""
+      else
+        VERSION="0.0.0-${CI_COMMIT_SHORT_SHA}"
+        PRIMARY_TAG="$CI_COMMIT_SHORT_SHA"
+        SECONDARY_TAG=""
+        MOVING_TAG="latest"
+      fi
+      echo "VERSION=$VERSION"
+      echo "PRIMARY_TAG=$PRIMARY_TAG"
+      echo "SECONDARY_TAG=$SECONDARY_TAG"
+      echo "MOVING_TAG=$MOVING_TAG"
+      BUILD_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+      echo "BUILD_DATE=$BUILD_DATE"
+  script:
+    - |
+      docker build \
+        --build-arg GIT_SHA="$CI_COMMIT_SHA" \
+        --build-arg BUILD_DATE="$BUILD_DATE" \
+        --build-arg VERSION="$VERSION" \
+        --build-arg SOURCE_URL="$CI_PROJECT_URL" \
+        --build-arg IMAGE_TITLE="$IMAGE_TITLE" \
+        -t "$IMAGE:$PRIMARY_TAG" \
+        "$BUILD_CONTEXT"
+      docker push "$IMAGE:$PRIMARY_TAG"
+    - |
+      if [ -n "$SECONDARY_TAG" ]; then
+        docker tag "$IMAGE:$PRIMARY_TAG" "$IMAGE:$SECONDARY_TAG"
+        docker push "$IMAGE:$SECONDARY_TAG"
+      fi
+    - |
+      if [ -n "$MOVING_TAG" ]; then
+        docker tag "$IMAGE:$PRIMARY_TAG" "$IMAGE:$MOVING_TAG"
+        docker push "$IMAGE:$MOVING_TAG"
+      fi
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/
+
+build:numio-srv:
+  extends: .build-template
+  variables:
+    IMAGE: "$IMAGE_SRV"
+    IMAGE_TITLE: "numio-srv"
+    BUILD_CONTEXT: "backend"
+
+build:numio-ui:
+  extends: .build-template
+  variables:
+    IMAGE: "$IMAGE_UI"
+    IMAGE_TITLE: "numio-ui"
+    BUILD_CONTEXT: "frontend"

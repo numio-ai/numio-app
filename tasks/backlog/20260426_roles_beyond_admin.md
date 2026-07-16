@@ -1,0 +1,34 @@
+---
+status: backlog
+kind: task
+feature: user_management_extensions
+title: Roles beyond admin — member, engineer, finance, viewer
+---
+
+# Roles beyond admin — member, engineer, finance, viewer
+
+## Problem statement
+
+Phase 1 ships only the `admin` role. The product needs `member`, `engineer`, `finance`, `viewer` to limit reach for non-admin users in larger teams.
+
+## Scope
+
+In scope:
+- Permission matrix (role × capability).
+- Backend authorization checks per endpoint.
+- UI gating (hide / disable actions per role).
+- Role-assignment dropdown expanded.
+
+Out of scope:
+- Per-resource ACLs (e.g. per-account permissions).
+
+## Acceptance criteria
+
+- Each role has a documented permission matrix.
+- Backend rejects unauthorized actions with HTTP 403.
+- UI hides or disables actions appropriately per role.
+
+## Quality gates
+
+- Permission matrix reviewed with PM before implementation.
+- Integration tests per role exercising every gated endpoint.

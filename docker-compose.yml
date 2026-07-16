@@ -1,0 +1,106 @@
+# Numio Docker Compose - Local Development
+#
+# Usage: docker compose up
+#
+# Services: postgres, backend (API), worker, frontend
+#
+# Host port bindings and container names are scoped by COMPOSE_PROJECT_NAME so
+# multiple git worktrees can run their own stacks in parallel without colliding.
+# When the default ports below are already in use (by a sibling worktree),
+# scripts/numio-dev.sh picks free ephemeral ports and persists them in
+# .numio/worktree.env. See scripts/tools/worktree.sh.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: numio
+      POSTGRES_PASSWORD: numio
+      POSTGRES_DB: numio
+    ports:
+      - "${POSTGRES_HOST_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U numio"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  valkey:
+    image: valkey/valkey:8-alpine
+    restart: unless-stopped
+    ports:
+      - "${VALKEY_HOST_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  backend:
+    image: numio-srv:latest
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      DATABASE_URL: postgresql+psycopg://numio:numio@postgres:5432/numio
+      VALKEY_URL: valkey://valkey:6379
+    ports:
+      - "${BACKEND_HOST_PORT:-8000}:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health').read()"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  worker:
+    image: numio-srv:latest
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      DATABASE_URL: postgresql+psycopg://numio:numio@postgres:5432/numio
+    command: ["python", "-m", "numio.worker"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  frontend:
+    image: numio-ui:latest
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        # Browser-side API URL — baked in at image build time. For a worktree
+        # running on a non-default backend port, rebuild the frontend image.
+        VITE_API_URL: http://localhost:${BACKEND_HOST_PORT:-8000}
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_CONTAINER_PORT:-3000}:80"
+    depends_on:
+      - backend
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:80/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  pgdata:

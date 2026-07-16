@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+.venv/
+.uv/
+
+# Node.js
+node_modules/
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+.frontend.log
+.backend.log
+
+# IDE
+.DS_Store
+.idea/
+*.swp
+*.swo
+
+# Build outputs
+frontend/dist/
+backend/dist/
+
+# Runtime
+.runtime/
+/run/
+.numio/
+.claude/worktrees/
+.claude/scheduled_tasks.lock
+
+# Local AWS credential scratch file — keep locally, never track
+keep.env

@@ -1,0 +1,64 @@
+---
+status: backlog
+kind: bug
+feature: tools
+title: `numio-ctl.sh logs` silently drops `grep` filters because container output is on stderr
+---
+
+# `numio-ctl.sh logs` silently drops `grep` filters because container output is on stderr
+
+## Date
+2026-04-17
+
+## Observed problem
+
+`./scripts/numio-ctl.sh logs [SERVICE] | grep PATTERN` appears to print every log line as if `grep` were ignored. The same happens with a raw `docker logs numio-worker | grep PATTERN`. Users see all output on the terminal and conclude the filter is broken.
+
+## Root cause
+
+`docker logs` and `docker compose logs` preserve the container's stream split: lines the container wrote to stdout go to the caller's stdout, lines written to stderr go to the caller's stderr. Python's `logging.basicConfig` writes to stderr by default, and that is what the Numio backend and worker use. A plain `| grep` only filters stdout; stderr bypasses the pipe and lands on the terminal unfiltered.
+
+`scripts/numio-ctl.sh` `cmd_logs()` shells out to `docker compose logs -f [SERVICE]` with no stderr redirection, so the caller inherits the split streams.
+
+## Reproduction
+
+```bash
+./scripts/numio-ctl.sh logs worker | grep __NEVER_MATCHES__
+# Terminal still shows every worker log line — grep appears to have done nothing.
+```
+
+## Expected vs actual
+
+- **Expected:** `./scripts/numio-ctl.sh logs ... | grep X` filters every log line. `grep NEVER_MATCHES` produces no terminal output.
+- **Actual:** All container log lines appear on the terminal regardless of the pattern, because they are on stderr and bypass the pipe.
+
+## Scope
+
+In scope:
+- `scripts/numio-ctl.sh` `cmd_logs()`.
+- Any documentation in `docs/ops-runbook.md` that shows `./scripts/numio-ctl.sh logs ...` being piped.
+- The raw-command appendix in `docs/ops-runbook.md` (note that raw `docker compose logs` needs `2>&1` when piped).
+
+Out of scope:
+- `scripts/numio-dev.sh` / `scripts/tools/dev.sh` log command — tracked in `tasks/backlog/20260416_08_align_numio_dev_log_command.md`, which already covers the same root cause for the developer CLI.
+- Backend logging configuration (keep logging to stderr — changing that is a separate decision).
+
+## Acceptance criteria
+
+1. `./scripts/numio-ctl.sh logs | grep __NEVER_MATCHES__` prints nothing. `./scripts/numio-ctl.sh logs <service> | grep __NEVER_MATCHES__` prints nothing.
+2. `./scripts/numio-ctl.sh logs worker | grep <known-substring>` matches every log line containing that substring, including lines that `docker logs` would have emitted on stderr.
+3. The fix only merges the stream of the `docker compose logs` child process. The wrapper's own diagnostics (e.g., `log_error`, `log_info`) continue to go to stderr, so shell scripts parsing `numio-ctl.sh` output are not affected.
+4. `--help` / usage text mentions that `logs` output is safe to pipe through `grep`, `head`, `less` without `2>&1`.
+5. The ops runbook appendix notes that raw `docker compose logs` requires `2>&1` when piped — making clear the wrapper handles this for you.
+
+## Validation steps
+
+1. `./scripts/numio-ctl.sh logs | head -n 20` — exits after 20 lines with no leaked stderr output below the 20th line.
+2. `./scripts/numio-ctl.sh logs worker | grep -c ''` — non-zero count on a running worker.
+3. `./scripts/numio-ctl.sh logs worker | grep __NEVER_MATCHES__` — empty output.
+4. On a terminal where `numio-ctl.sh` itself would normally emit a diagnostic on stderr (e.g., Docker not running), confirm that diagnostic is still visible — i.e., only the child process' stderr was merged, not the wrapper's.
+
+## Risks
+
+- **Risk:** merging stderr into stdout at the wrong level hides real wrapper diagnostics. Mitigation: apply `2>&1` only on the `docker compose logs` invocation, not the whole function (see `cmd_logs` structure).
+- **Risk:** downstream tooling that relies on the current split behavior (unlikely, but possible). Mitigation: call out the change in the commit message; keep the change scoped to `cmd_logs`.

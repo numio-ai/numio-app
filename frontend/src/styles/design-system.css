@@ -1,0 +1,159 @@
+/**
+ * Shared design system — cards, badges, page layout, view links.
+ * Replicate Overview patterns on every page.
+ */
+
+/* Card component — every data card */
+.card {
+  background: var(--bg-surface, #ffffff);
+  border: 1px solid var(--border, #efefef);
+  border-radius: 12px;
+  padding: 20px 24px;
+  box-shadow: none;
+  transition: border-color 150ms ease;
+}
+.card:hover {
+  border-color: var(--border-hover, #d1d5db);
+}
+
+/* Card section header label */
+.card-label {
+  font-size: var(--text-label, 11px);
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-xs-muted, #9ca3af);
+  margin-bottom: 12px;
+}
+
+/* Primary metric — hero number in each card */
+.card-metric {
+  font-size: var(--text-2xl, 28px);
+  font-weight: 600;
+  color: var(--text-primary, #111827);
+  letter-spacing: -0.02em;
+}
+
+/* Secondary text */
+.card-secondary {
+  font-size: var(--text-sm, 13px);
+  color: var(--text-muted, #6b7280);
+}
+
+/* View links — everywhere */
+.view-link {
+  font-size: var(--text-sm, 13px);
+  color: var(--accent, #2563eb);
+  text-decoration: none;
+  cursor: pointer;
+}
+.view-link:hover {
+  text-decoration: underline;
+}
+
+/* Tag / pill — team and category tags */
+.tag {
+  font-size: var(--text-label, 11px);
+  padding: 2px 8px;
+  border-radius: 9999px;
+  background: #f3f4f6;
+  color: var(--text-secondary, #374151);
+  font-weight: 400;
+}
+
+/* Status badges */
+.badge-success {
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 9999px;
+  background: var(--success-bg, #f0fdf4);
+  color: var(--success, #16a34a);
+}
+.badge-warning {
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 9999px;
+  background: var(--warning-bg, #fffbeb);
+  color: var(--warning, #d97706);
+}
+.badge-danger {
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 9999px;
+  background: var(--danger-bg, #fef2f2);
+  color: var(--danger, #dc2626);
+}
+.badge-neutral {
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 9999px;
+  background: var(--neutral-bg, #f9fafb);
+  color: var(--neutral, #6b7280);
+}
+
+/* Page grid — every page content area */
+.page-content {
+  padding: var(--content-padding, 24px);
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--card-gap, 16px);
+}
+.page-content__full {
+  grid-column: 1 / -1;
+}
+@media (max-width: 1024px) {
+  .page-content {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Page header — every page */
+.page-header {
+  padding: 0 0 20px 0;
+}
+.page-header h1 {
+  font-size: var(--text-lg, 16px);
+  font-weight: 500;
+  color: var(--text-primary, #111827);
+  margin: 0;
+}
+.page-header__subtitle {
+  font-size: var(--text-sm, 13px);
+  color: var(--text-muted, #6b7280);
+  margin-top: 4px;
+}
+
+/* Ask Numio FAB — every page */
+.ask-numio-fab {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  background: #ffffff;
+  border: 1px solid #e5e5e5;
+  border-radius: 9999px;
+  font-size: var(--text-sm, 13px);
+  color: var(--text-primary, #111827);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+  cursor: pointer;
+  z-index: 50;
+}
+.ask-numio-fab:hover {
+  border-color: var(--border-hover, #d1d5db);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+}
+
+/* Global typography and page background — Overview benchmark */
+* {
+  font-family: var(--font, "Inter", -apple-system, BlinkMacSystemFont, sans-serif);
+  -webkit-font-smoothing: antialiased;
+}
+body {
+  background: var(--bg-page, #f7f7f7);
+  color: var(--text-primary, #111827);
+  font-size: var(--text-base, 14px);
+  line-height: 1.5;
+}

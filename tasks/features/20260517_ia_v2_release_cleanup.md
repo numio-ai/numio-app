@@ -1,0 +1,39 @@
+---
+status: backlog
+slug: ia_v2_release_cleanup
+title: IA v2 release cleanup — small follow-ups deferred during the IA v2 rollout
+---
+
+# IA v2 release cleanup — small follow-ups deferred during the IA v2 rollout
+
+## Problem statement
+
+The IA v2 rollout (features `ia_v2_shell`, `ia_v2_understand`, `ia_v2_optimize`, `ia_v2_govern`, `ia_v2_backend_support`) shipped as a UI restructure with mocks + scaffolds. Two cleanup items were explicitly deferred and need to land before the IA v2 release is truly "closed":
+
+1. Legacy `/ai-usage` and `/cloud-usage` routes continue to serve their v1 page (`AIUsagePage.jsx` / `CloudUsagePage.jsx`) with a `<PendingRedesignPanel>` placeholder for the embedded `<AIWorkloads>` and `<Recommendations>` tabs. No sidebar link points to them; reachable only by direct URL.
+2. Visual pixel-diff against the design mocks (`docs/design-mocks/numio-ia-v2/project/*.jsx`) has not been performed. Page-level vitest assertions cover structure + data-binding only.
+
+## Objective
+
+Both deferrals are closed: no legacy `/ai-usage` or `/cloud-usage` route survives, and a human reviewer has signed off the visual fidelity of every IA v2 page against its design mock.
+
+## Acceptance criteria
+
+A1. Visiting `/ai-usage` returns the inline `<NotFound>` 404 (consistent with the IA v2 deprecated-URL policy from feature `ia_v2_shell`).
+
+A2. Visiting `/cloud-usage` returns the inline `<NotFound>` 404.
+
+A3. `pages/AIUsage/AIUsagePage.jsx` and `pages/CloudUsage/CloudUsagePage.jsx` are deleted; no `React.lazy(...)` import for them remains in `App.jsx`. `git grep -F 'AIUsagePage' frontend/src/` and `git grep -F 'CloudUsagePage' frontend/src/` both return zero matches.
+
+A4. A reviewer has walked every IA v2 page in the running dev frontend with the matching `docs/design-mocks/numio-ia-v2/project/*.jsx` open side-by-side, recorded findings, and signed off the visual fidelity. Spacing, color, and density must match within ±2px; copy must match verbatim.
+
+## Tasks
+
+Execute in order:
+
+1. `ia_v2_remove_legacy_usage_routes` — delete `/ai-usage` and `/cloud-usage` routes, page files, and lazy imports.
+2. `ia_v2_visual_diff_signoff` — human pixel-diff review of all 9 IA v2 pages against design mocks; capture findings + sign-off.
+
+## Linked design mocks
+
+- `docs/design-mocks/numio-ia-v2/project/Numio IA v2.html` — every artboard.

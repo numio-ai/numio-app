@@ -1,0 +1,82 @@
+---
+status: done
+kind: task
+feature: ia_v2_govern
+title: IA v2 Policies — toggle column, mode chips, bulk actions, standard toolbar
+---
+
+# IA v2 Policies — toggle column, mode chips, bulk actions, standard toolbar
+
+# IA v2 Policies — toggle column, mode chips, bulk actions, standard toolbar
+
+## Problem statement
+
+The current Policies page uses "Edit" buttons in lieu of toggles, has no Mode chip semantics, no bulk action bar, no saved views.
+
+## Scope
+
+In scope:
+- New page at `/policies`; legacy `/govern/policies` and any other legacy policies route removed in `ia_v2_routes`.
+- Table columns: NAME · TYPE chip · MODE chip · ENABLED toggle · OPEN VIOLATIONS · LAST CHANGED · `⋯`.
+- Type chips: Tag governance / CI guard / Placement / Approval / Lifecycle / Security / AI governance.
+- Mode chips: Block / Warn / Auto-remediate.
+- Standard toolbar with view presets (All / With open violations / Blocking / Disabled / Created by me).
+- Bulk action bar: Enable · Disable · Change mode… · Export.
+- Header: `⟳ Rescan`; toolbar contains "Policy library →" link.
+- Subtitle (banner gone): "6 active policies · 4 blocking · 1 auto-remediate · 47 open violations".
+
+Out of scope:
+- Policy authoring (`+ New policy` opens stub).
+- Real Change-Mode dialog beyond a stubbed select.
+- Backend CRUD — `ia_v2_be_policies`.
+
+## Acceptance criteria
+
+A1. `/policies` renders the table per the mock; legacy `/govern/policies` 404s.
+
+A2. Enabled toggle in a row flips state without confirmation (mock).
+
+A3. Bulk select shows the action bar with Enable / Disable / Change mode / Export.
+
+A4. Mode column shows the three chip variants (Block / Warn / Auto-remediate).
+
+A5. Standard toolbar present with all 5 view presets.
+
+A6. No "Edit" button appears in any row (`git grep -F 'Edit' frontend/src/pages/[Pp]olicies/` returns no row-action hits in production code).
+
+## Quality gates
+
+- Build + tests pass.
+- Visual diff vs `docs/design-mocks/numio-ia-v2/project/page-policies.jsx`.
+- Unit test covers bulk action selection state.
+
+## Summary
+
+### Steps completed
+
+1. Built `pages/Policies/PoliciesPage.jsx` (~310 lines) with the v2 table: NAME (+ violation badge inline) · TYPE chip · MODE chip (Block / Warn / Auto-remediate) · OPEN VIOLATIONS · LAST CHANGED · ENABLED toggle · ⋯ menu.
+2. Standard toolbar: ViewsPicker with 5 presets (All · With open violations · Blocking · Disabled · Created by me) · Share link · Save as · Policy library → · ⟳ Rescan · + New policy stub.
+3. Bulk action bar: Enable · Disable · Change mode… · Export · Clear. `Enable` / `Disable` flip the toggle for every selected row then clear the selection.
+4. Subtitle aggregates four signals: active policies · blocking · auto-remediate · open violations.
+5. Per-row ⋯ menu replaces the v1 Edit button (Open editor / Duplicate / View violations / Change mode… / Disable). No Edit button anywhere in `pages/Policies/`.
+6. Wired `/policies` lazy route; removed `/govern/policies`; deleted `pages/Govern/Policies.jsx`.
+7. Wrote 12 vitest cases covering A1–A6: page render + 5 view presets, toggle without confirmation, bulk bar surfaces 4 actions + Clear, bulk Disable + clear, mode chip data attribute for the three variants, no `<button>Edit</button>` in rows, ⋯ menu present, view filtering for Blocking and Disabled, subtitle signals.
+
+### Changes made
+
+- New: `pages/Policies/PoliciesPage.jsx`, `pages/Policies/PoliciesPage.test.jsx`.
+- Modified: `App.jsx` — swapped lazy import; `/govern/policies` → `/policies`.
+- Deleted: `pages/Govern/Policies.jsx`.
+
+### Notable decisions or deviations
+
+- **Legacy `/govern/policies` route removed entirely** per A8 of the parent feature ("Policies is at `/policies`"). Stale URLs 404 — consistent with project-wide direction.
+- **`+ New policy` opens a stub dialog**, per task scope.
+- **`Change mode…` button in bulk bar is a stub** — task body lists real Change-Mode dialog as out of scope.
+- **Policy library → link goes to `https://docs.numio.local/policies`** — placeholder external URL.
+- **Test count: 345 → 357** (+12 PoliciesPage tests).
+
+### Links
+
+- Tests: `cd frontend && npm test` — 357 / 357 passing.
+- Build: `cd frontend && npm run build` — successful.

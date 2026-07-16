@@ -1,0 +1,37 @@
+---
+status: backlog
+kind: task
+feature: user_management
+title: Schema migration — users, setup_tokens, sessions
+---
+
+# Schema migration — users, setup_tokens, sessions
+
+## Problem statement
+
+The user-management spec adds columns to `users` and introduces two new tables (`setup_tokens`, `sessions`). The schema does not exist yet. Every downstream task depends on the migration landing first.
+
+## Scope
+
+In scope:
+- Alembic migration with both upgrade and downgrade.
+- Extend `users`: nullable `password_hash` (text), `is_active` (bool default true), `role` (enum, default 'admin'), `workspace_id` FK to default workspace where missing.
+- Case-insensitive email uniqueness (citext extension or `lower(email)` unique index).
+- New `setup_tokens` table with FK to `users`, indexed `token_hash` and `(user_id, used_at)`.
+- New `sessions` table with FK to `users`, unique `token_hash`, `expires_at`, `last_seen_at`, `revoked_at`.
+
+Out of scope:
+- ORM model changes (covered by `identity_backend_native`).
+- Data backfill — no real users exist yet.
+
+## Acceptance criteria
+
+- `./scripts/numio-dev.sh migrate` applies cleanly on a fresh DB.
+- `alembic downgrade -1` reverses every change without error.
+- `psql` inspection confirms columns, tables, indexes, and FKs as specified.
+- Inserting two `users` rows differing only by email case fails the unique constraint.
+
+## Quality gates
+
+- `cd backend && uv run alembic upgrade head && uv run alembic downgrade -1 && uv run alembic upgrade head` succeeds on a fresh DB.
+- `cd backend && uv run ruff check . && uv run ruff format --check .` passes.

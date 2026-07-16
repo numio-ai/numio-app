@@ -1,0 +1,56 @@
+---
+status: backlog
+kind: bug
+feature: bugfixes
+---
+
+# Overview shows "NOT SYNCED YET" / "Data: Syncing" after ingestion completes
+
+**Date:** 2026-04-18
+
+## Observed problem
+
+After a successful `cur_ingestion` run, the top header pill reads **Data: Syncing** and several Overview cards still display **NOT SYNCED YET** / **Not synced yet** even though:
+
+- `GET /api/v1/jobs/ingestion-status` returns `last_status = success`, recent `last_sync_at`, non-zero `record_count`.
+- `cost_records` table has rows for the current billing period.
+- The same Overview page *simultaneously* renders correct numeric values (Total Spend, Daily Spend chart, Top Cost Drivers).
+
+So the data is there — the freshness labels and the header pill are stale. The UI mixes fresh data with stale "never synced" chrome, which is more confusing than either consistent state.
+
+## Expected vs actual
+
+| | Expected | Actual |
+|---|----------|--------|
+| Header pill | `Data: Up to date` (or similar) with last-sync timestamp once a successful run exists | `Data: Syncing` persists indefinitely |
+| Per-card "synced" label | Shows the actual `last_sync_at` from `ingestion-status` | Shows `NOT SYNCED YET` / `Not synced yet` |
+| Consistency | All freshness labels agree with the numeric data shown on the same page | Labels say "never synced", values say otherwise |
+
+## Reproduction steps
+
+1. Fresh install, seed default workspace.
+2. Add an AWS account with valid CUR config (status goes **connected**).
+3. `curl -fsS -X POST http://localhost:8000/api/v1/jobs/cur_ingestion/trigger` returns `success`.
+4. Open / reload **Overview**.
+5. Observe: Total Spend shows a non-zero value, Daily Spend chart renders, but the card still labels itself `NOT SYNCED YET` and the header pill stays `Data: Syncing`.
+
+## Environment & context
+
+- Reproduced on full containerized stack.
+- **Suspects:**
+  - Freshness labels may be derived from a separate endpoint / context than the numeric values (so one resolves and the other doesn't).
+  - Header pill likely subscribes to a "syncing" flag that isn't cleared when `job_runs.finished_at` is written, or polls on a long interval.
+- **Related code:** `frontend/src/components/DataStatusPill.jsx`, `frontend/src/context/IngestionStatusContext.jsx`, Overview page cards.
+- **Related task:** `tasks/backlog/20260417_01.03_functionality--data_pill_popover_real_job_data.md` — likely same context.
+
+## Acceptance criteria (closure)
+
+- After a successful ingestion run, reloading Overview shows freshness labels sourced from `ingestion-status` (timestamp or "Up to date") on all cards that currently read `NOT SYNCED YET`.
+- Header **Data** pill transitions from `Syncing` to a terminal state (e.g. `Up to date`, `Failed`, `Stale`) without requiring a full page reload, within a bounded poll interval.
+- Empty workspace (no runs) continues to show an honest `NOT SYNCED YET`.
+- Spot-check: one manual run → labels update → numbers and labels agree.
+
+## Risks & impact
+
+- Users mistrust the dashboard, open support tickets, or re-trigger runs unnecessarily.
+- Masks real "stuck syncing" incidents, because stale-by-default looks identical to a genuinely stuck job.

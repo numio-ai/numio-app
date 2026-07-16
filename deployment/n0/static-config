@@ -1,0 +1,10 @@
+# n0 (app.numio.ai) static configuration
+#
+# Non-secret configuration values. Secrets are fetched from AWS SSM at runtime.
+
+NUMIO_ENV=n0
+LOG_LEVEL=INFO
+BACKEND_PORT=8000
+FRONTEND_PORT=80
+VITE_API_URL=https://app.numio.ai
+MCP_ALLOWED_HOSTS=app.numio.ai

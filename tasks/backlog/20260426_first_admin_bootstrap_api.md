@@ -1,0 +1,35 @@
+---
+status: backlog
+kind: task
+feature: user_management
+title: First-admin bootstrap API
+---
+
+# First-admin bootstrap API
+
+## Problem statement
+
+Spec R4 requires the backend to expose a setup-state endpoint and a first-admin creation endpoint that is gated by that state. Without these, the frontend cannot drive the first-run flow.
+
+## Scope
+
+In scope:
+- `GET /api/v1/setup/state` returning `{ needs_first_admin: bool }`.
+- `POST /api/v1/setup/first-admin` accepting `email`, `name`, `password`. Creates user, sets Argon2id hash, creates session, returns user payload + Set-Cookie.
+- Bypass-mode short-circuit returning `needs_first_admin: false`.
+
+Out of scope:
+- Frontend UI (covered by `frontend_setup_login_flows`).
+- Subsequent user creation (covered by `user_crud_admin_api`).
+
+## Acceptance criteria
+
+- `setup/state` returns `needs_first_admin: true` only when the `users` table has zero active admin rows in the default workspace.
+- `setup/first-admin` returns HTTP 409 when state is `false`.
+- Successful POST signs the user in (Set-Cookie header carrying a session token).
+- Bypass mode returns `needs_first_admin: false` regardless of DB state.
+
+## Quality gates
+
+- Integration tests against a test DB cover: happy-path bootstrap, double-bootstrap rejection (409), bypass-mode behavior, password length validation.
+- `uv run ruff check .` and `uv run ruff format --check .` pass.

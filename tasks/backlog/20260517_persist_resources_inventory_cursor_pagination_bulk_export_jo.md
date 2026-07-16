@@ -1,0 +1,44 @@
+---
+status: backlog
+kind: task
+feature: ia_v2_persistence
+title: Persist Resources inventory (cursor pagination + bulk export job)
+---
+
+# Persist Resources inventory (cursor pagination + bulk export job)
+
+## Problem statement
+
+`api/ia_v2_inventory.py` returns 5 fixture rows + advertises a total of 1284. The frontend `ResourcesPage` synthesizes ~1000 rows via `resourcesMockData.js`. Real implementation needs cursor-paginated queries over the existing `cloud_resources` table, a bulk-export job that writes a real CSV artifact, and a hibernate stub that persists intent but never writes to AWS.
+
+## Scope
+
+In scope:
+- No new tables (uses existing `cloud_resources`). New table: `bulk_export_jobs(id, workspace_id, requested_by, status, artifact_url, created_at, finished_at)`.
+- `GET /inventory/resources?cursor=&limit=&cols=&search=` paginates `cloud_resources` by `(spend DESC, id ASC)`; `cursor` is base64(`spend,id`).
+- `GET /inventory/columns/available` returns the catalog (already correct — no DB change).
+- `POST /inventory/bulk/export` creates a `bulk_export_jobs` row, enqueues a worker job, returns `accepted` count + `job_id`. Worker writes a CSV to S3 (or local file in dev) and updates `artifact_url` + `status=done`.
+- `POST /inventory/bulk/hibernate` persists the request as a `bulk_export_jobs` row with `action='hibernate'` (same table can hold both action types via discriminator) but does NOT write to AWS — still a stub.
+- Frontend: `ResourcesPage` calls real endpoints; `RESOURCES_ALL` and the `synthesize()` helper in `resourcesMockData.js` are deleted (or moved to a test fixture).
+
+Out of scope:
+- Real AWS hibernate execution — explicitly out of IA v2 scope.
+- Virtualization on the client side — server pagination covers it.
+
+## Acceptance criteria
+
+A1. Alembic migration applies; `bulk_export_jobs` exists.
+
+A2. `GET /inventory/resources` returns rows from `cloud_resources` ordered consistently; cursor invariant (no duplicates, no skips across pages).
+
+A3. Bulk-export round-trip: POST returns 202-equivalent (`job_id`); worker writes the CSV; subsequent GET on the job (or a small `GET /inventory/bulk-jobs/{id}` endpoint added here) reports `status=done` and `artifact_url`.
+
+A4. Bulk-hibernate POST records the row but does not call AWS; pytest asserts no `boto3` call.
+
+A5. Frontend ResourcesPage renders real rows; infinite scroll fetches the next page; `synthesize()` is gone.
+
+## Quality gates
+
+- Backend pytest covers cursor invariant + bulk-export round-trip.
+- Frontend `npm test` + `npm run build` pass.
+- `git grep -F 'synthesize' frontend/src/pages/Resources/` returns zero hits.

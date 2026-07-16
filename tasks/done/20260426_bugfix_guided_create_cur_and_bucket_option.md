@@ -1,0 +1,70 @@
+---
+status: done
+kind: bug
+feature: bugfix_setup_wizard
+title: Add 'Create new CUR + S3 bucket' mode to Guided onboarding
+---
+
+# Add 'Create new CUR + S3 bucket' mode to Guided onboarding
+
+## Problem statement
+
+Today the Guided CFN template only provisions IAM resources. The customer must already have an S3 bucket and a CUR (Cost and Usage Report) export configured before onboarding. The Customize step gives no way to indicate "I haven't set up CUR yet, please create it for me as part of the stack." A first-time AWS admin who runs Guided ends up with a working IAM role but no cost data, and has to bounce out to the AWS Billing console to set up CUR before Numio can read anything.
+
+The fix: add a Customize-step toggle "Use existing CUR" vs "Create new CUR (recommended)" with Create-new as default. In Create-new mode the template provisions an S3 bucket and an `AWS::BCMDataExports::Export` (CUR 2.0) alongside the existing IAM resources.
+
+## Scope
+
+In:
+
+- **Customize** — a mandatory two-option control "CUR setup": "Create new (recommended)" (default) and "Use existing CUR".
+- **Create-new mode**:
+  - CUR S3 bucket / prefix / report-name input fields are hidden; their values auto-derive:
+    - Bucket: `numio-cur-<label>`
+    - Path prefix: `daily`
+    - Report name: `numio-cur-<label>`
+  - Region is locked to `us-east-1` regardless of any other selection. Region picker hidden in this mode.
+  - Rendered template includes:
+    - `AWS::S3::Bucket` named `numio-cur-<label>` with the AWS-Billing service write bucket policy (the canonical bucket policy AWS Billing requires for CUR delivery — `bcm-data-exports.amazonaws.com` `s3:PutObject` on the export prefix, plus the legacy `billingreports.amazonaws.com` policy if needed).
+    - `AWS::BCMDataExports::Export` configured: standard data export, CUR 2.0, billing view default, daily granularity, all standard fields, Parquet, overwrite versioning, this-account storage scope.
+  - The IAM role's read policy targets the in-stack bucket via `Ref` / `Fn::GetAtt`, not via a parameter that takes a literal name.
+- **Use-existing mode** — current behavior unchanged: user enters bucket / prefix / report name; the template does not include S3 or CUR export resources; the IAM read policy targets the user-supplied bucket name.
+- **Verify** — when validating a freshly-deployed Create-new mode account, accept "S3 list returned 0 objects" as a **pass with hint** ("First CUR delivery pending — AWS delivers within ~24 hours; revalidate tomorrow") rather than a fail. Use-existing mode keeps today's stricter semantics.
+
+Out:
+
+- User-supplied bucket name in Create-new mode.
+- Multi-region support; non-`us-east-1` is rejected in Create-new mode.
+- CUR 1.0 fallback.
+- Pre-flight check for global S3 bucket-name collisions (treated as a normal stack-failure for the customer to resolve in AWS Console).
+- Disconnect-time auto-deletion of the stack — the customer manages their own stack lifecycle.
+
+## Acceptance criteria
+
+1. Customize step shows a "CUR setup" choice with two options: "Create new (recommended)" and "Use existing CUR". Default = "Create new".
+2. "Create new" hides bucket / prefix / report-name inputs; "Use existing" shows them and behaves as today.
+3. "Create new" locks region to `us-east-1` and hides the region picker.
+4. The template generated in "Create new" mode contains `AWS::S3::Bucket` named `numio-cur-<label>` with the bucket policy required by AWS Billing for CUR 2.0 delivery attached.
+5. The template generated in "Create new" mode contains `AWS::BCMDataExports::Export` (CUR 2.0) with the standard daily Parquet config described in Scope.
+6. The IAM role's read policy in "Create new" mode references the bucket via stack-internal reference, not via the parameter.
+7. The template generated in "Use existing" mode is byte-identical to today's behavior for a given input set.
+8. Verify in "Create new" mode treats `s3_list` returning 0 objects as `pass` with a hint message; the user is not blocked from completing the wizard.
+9. Verify in "Use existing" mode keeps today's stricter semantics (0 objects ≠ pass; explicit skip / fail per existing logic).
+10. Manual: deploy a Create-new template in a clean test AWS account; confirm `numio-cur-<label>` bucket exists, `numio-cur-<label>` Data Export exists in AWS Billing → Data Exports, IAM role validates, Verify step accepts the connection with the hint, and revalidating after 24 h produces a normal pass.
+
+## Quality gates
+
+- `cd backend && VIRTUAL_ENV=.venv uv run --active pytest` — full suite passes; new tests cover both modes' rendered template contents and the Verify step's per-mode 0-objects semantics.
+- `cd backend && VIRTUAL_ENV=.venv uv run --active ruff check . && ruff format --check .` — clean.
+- `cd frontend && npm test` — full suite passes; new tests cover the mode toggle, the conditional fields, and the region lock.
+- `docs/app/settings/integrations/aws-integration-spec.md` updated to describe the two CUR modes, the auto-derived names, the locked region in Create-new, and the Verify step's pending-delivery semantics.
+- `docs/user-guide.md` — Advanced flow's CUR section unchanged. Add a brief reference that Guided onboarding can now provision CUR for the customer.
+
+## Constraints and assumptions
+
+- AWS Billing CUR delivery is asynchronous: the first manifest lands ~24 h after stack creation. The Verify step's relaxed semantics in Create-new mode bridges this gap.
+- `AWS::BCMDataExports::Export` requires the bucket policy to allow `bcm-data-exports.amazonaws.com` `s3:PutObject` on the export prefix. The bucket policy attached to the new bucket must include this.
+- Bucket name `numio-cur-<label>` is globally unique enough at our customer scale; rare collisions surface as a normal CFN stack-create failure that the customer resolves in their AWS Console.
+- Numio does not auto-delete the customer's stack when an account is disconnected. Stack lifecycle stays customer-managed.
+- Today's `cur_service.py` reads CUR 2.0 / Data Exports v2 layout (`{prefix}/{report_name}/metadata/...`) — verified against the dev runbook; the new export's path prefix must conform.
+- Depends on `bugfix_guided_verify_button_no_feedback` landing first — the relaxed-pass-with-hint UX in this task sits on top of the cleaned-up Verify step rendering.

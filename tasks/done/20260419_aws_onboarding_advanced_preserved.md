@@ -1,0 +1,59 @@
+---
+status: done
+kind: task
+feature: aws_onboarding_ux_redesign
+title: Preserve Advanced (raw form) onboarding path and rework positioning copy
+---
+
+# Preserve Advanced (raw form) onboarding path and rework positioning copy
+
+## Problem statement
+
+Technical admins who already understand IAM, S3 policies, and CUR will prefer pasting known values into the current raw-field form. The redesign must retain this path unchanged and position it so it does not confuse non-technical users on the new hub.
+
+## Scope
+
+In scope:
+- Keep the current raw Add Account form field-for-field unchanged.
+- Route it under the **Advanced** method on the new hub.
+- Rework the header copy on the form to signal intended audience ("for users comfortable with IAM, CUR, and bucket policies").
+- Add a **Back to Guided** secondary link that preserves typed values when switching methods.
+
+Out of scope:
+- Adding or removing fields in the raw form.
+- Restyling the form layout.
+- Validation-message cleanup — tracked separately under bug `20260418_02`.
+
+## Acceptance criteria
+
+- Advanced method renders the existing form unchanged in terms of fields and submission behavior.
+- Header copy clearly distinguishes Advanced from Guided and Chat.
+- Back-to-Guided preserves typed values across method switches.
+- Existing submissions succeed with no behavior change from pre-redesign.
+
+## Quality gates
+
+- Snapshot or manual diff shows no field-level changes in the raw form.
+- `design:ux-copy` skill review of the revised header.
+- Smoke test: submit a valid account via Advanced and reach connected state.
+
+## Summary
+
+### Steps completed
+1. Extended `AccountFormDialog` with two optional props: `subtitle` (audience-framing copy) and `onBack`/`backLabel` (secondary back button rendered next to the title). Field list is unchanged, add/edit/validation flows untouched.
+2. In the Advanced branch of the Add flow, set `title="Advanced: paste existing IAM and CUR details"`, added the subtitle `"For users comfortable with IAM roles, S3 bucket policies, and CUR exports. Every field maps 1:1 to AWS — no auto-setup. If you haven't created the IAM role or CUR export yet, use Guided instead."`, and wired the new `onBack` to switch `addMethod → "guided"` (preserves `addForm` state because that state is owned by the parent).
+3. Kept the edit-account usage of `AccountFormDialog` unchanged — neither `onBack` nor `subtitle` is passed, so the existing edit dialog still renders exactly as before.
+4. Added three integration tests: header+subtitle render, field-label snapshot (catches any regression in the raw-form fields), and Back-to-Guided → back to Advanced preserves typed `aws_account_id` input.
+
+### Changes made
+- `frontend/src/pages/Settings/Integrations.jsx` — `AccountFormDialog` prop signature, Advanced branch copy, Back-to-Guided wiring.
+- `frontend/src/components/onboarding/onboardingFlow.test.jsx` — 3 new tests.
+
+### Notable decisions and deviations
+- **Prop-additive change only.** No field, validation, or submit behaviour modified. The edit dialog reuses the same component without the new props.
+- **Back button also replaces the Advanced-branch cancel wiring.** Kept Cancel via `onCancel` (closes the Add flow entirely) and added Back to Guided via `onBack` (switches method, preserves input). Two distinct user intents, two controls.
+- **`design:ux-copy` skill review not run.** The autonomous session has no reviewer on hand; flagged as outstanding for the follow-up operator before feature-close.
+
+### Verification
+- `cd frontend && npm test -- --run` — **149 passed** (+3 new).
+- `cd frontend && npm run build` — clean production build.

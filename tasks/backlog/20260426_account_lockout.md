@@ -1,0 +1,35 @@
+---
+status: backlog
+kind: task
+feature: user_management_extensions
+title: Account lockout / brute-force protection
+---
+
+# Account lockout / brute-force protection
+
+## Problem statement
+
+Phase 1 has no brute-force protection. Cloud-hosted deployments need it before sensitive customer data lands.
+
+## Scope
+
+In scope:
+- Failed-login counter with a sliding window per account.
+- Temporary account lock with auto-unlock after a cooldown.
+- Admin override to unlock from `Settings → Users`.
+
+Out of scope:
+- CAPTCHA.
+- IP-based lockout (account-based only in this iteration).
+
+## Acceptance criteria
+
+- N failed attempts within M minutes lock the account for K minutes.
+- Lockout response wording does not reveal which factor failed (avoid email enumeration).
+- Admin can unlock from the user list.
+- Thresholds N, M, K are configurable via env vars with sane defaults.
+
+## Quality gates
+
+- Tests cover lockout, auto-unlock, admin unlock, threshold configurability.
+- Default thresholds documented in the ops runbook.

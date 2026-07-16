@@ -1,0 +1,112 @@
+---
+status: done
+kind: bug
+feature: bugfixes
+title: AWS account onboarding — bugfixes
+---
+
+# AWS account onboarding — bugfixes
+
+## Problem statement
+
+Bug-collector for issues discovered while walking the **AWS account onboarding** flow (Settings → Integrations → Add Account → Guided / Advanced / Chat). Each finding below is a small UX/correctness defect that does not warrant its own ticket but must not be lost. Entries are appended as the flow is exercised; the task is not done until every listed entry is fixed.
+
+Components in play:
+- [GuidedOnboarding.jsx](frontend/src/components/onboarding/GuidedOnboarding.jsx) — Guided wizard.
+- [OnboardingMethodHub.jsx](frontend/src/components/onboarding/OnboardingMethodHub.jsx) — method picker.
+- [Integrations.jsx](frontend/src/pages/Settings/Integrations.jsx) — Advanced form (`AccountFormDialog`).
+
+### Related tickets (do not re-cover here)
+
+These cover specific onboarding bugs that overlap the same surfaces as the entries below. Do not re-fix them inside this task:
+
+- [tasks/backlog/20260425_prefill_externalid_field_in_guided_aws_onboarding_wizard.md](tasks/backlog/20260425_prefill_externalid_field_in_guided_aws_onboarding_wizard.md) — prefill ExternalId on Guided / Verify step.
+- [tasks/backlog/20260425_prefill_externalid_field_in_advanced_aws_onboarding_form_int.md](tasks/backlog/20260425_prefill_externalid_field_in_advanced_aws_onboarding_form_int.md) — prefill ExternalId on the Advanced form (covers the "surface the workspace external_id" need).
+- [tasks/backlog/20260425_misleading_s3_prefix_placeholder_in_advanced_aws_onboarding.md](tasks/backlog/20260425_misleading_s3_prefix_placeholder_in_advanced_aws_onboarding.md) — fix S3 Prefix placeholder on the Advanced form.
+
+## Bug list
+
+### ✓ 1. Guided / Intro: AWS admin prerequisite is too subtle [FIXED]
+
+- **Where:** Guided flow, step 1 `intro` ([GuidedOnboarding.jsx:310-317](frontend/src/components/onboarding/GuidedOnboarding.jsx:310)).
+- **Observed:** the prerequisite "You need the AWS Console admin permission for your account" is rendered in `--text-muted` at `text-xs`, sandwiched between two other muted paragraphs. A user reported missing the line entirely, ran the CloudFormation template without sufficient permissions, the stack failed, and the user concluded "the application doesn't work."
+- **Expected:** the admin-permission requirement is rendered as a visually distinct **prerequisites** block (callout / alert), readable as a precondition rather than a footnote, with contrast at body-copy level (not muted).
+- **Constraints:** presentational fix only — no new gating dialog, confirmation, or acknowledgement checkbox. Wording continues to state both what is required (AWS Console admin) and what is *not* required (AWS CLI, IAM familiarity, pre-created role).
+
+### ✓ 2. Guided / Apply: missing step-by-step instructions for the AWS CloudFormation console [FIXED]
+
+- **Where:** Guided flow, step 3 `apply` ([GuidedOnboarding.jsx:467-595](frontend/src/components/onboarding/GuidedOnboarding.jsx:467)).
+- **Observed:** the Apply step hands the user a Launch URL / template download / copy-paste body and tells them to "wait for `CREATE_COMPLETE`," but does not explain what to *do* inside the AWS Console. A first-time CloudFormation user has to guess at the four wizard pages and which acknowledgements to tick, leading to mistakes and a "didn't work" report.
+- **Expected:** the Apply step renders a numbered, page-by-page walkthrough mirroring the AWS Console wizard. The walkthrough must include at minimum:
+    1. **Create stack** — choose *Upload a template file* and upload the file downloaded above (or rely on the pre-loaded template if Launch URL was used).
+    2. **Specify stack details** — name the stack. Suggest a default name such as `ConnectToNumio-<YYYYMMDD-HHmm>` (a copy-friendly suggestion is enough; no need to inject the timestamp into the launch URL).
+    3. **Configure stack options** — tick the IAM **Capabilities** acknowledgement (`CAPABILITY_NAMED_IAM`), accept defaults, click Next.
+    4. **Review and create** — scroll to the bottom, click Submit (a.k.a. *Create stack*).
+    5. **Wait** — the stack reaches `CREATE_COMPLETE` in ~2 minutes; then return to Numio.
+- **Constraints:** content/copy fix; no change to the launch URL, template, or backend. Keep the walkthrough scannable (numbered list, short lines, bold the wizard page names so they match what the user sees in AWS).
+
+### ✓ 3. Advanced: Role ARN label and CUR section need clearer guidance [FIXED]
+
+- **Where:** Advanced flow, "Advanced: paste existing IAM and CUR details" form (`AccountFormDialog` in [Integrations.jsx:107-237](frontend/src/pages/Settings/Integrations.jsx:107)).
+- **Observed:** two independent issues on the same screen:
+    - **3a. `Role ARN *` label is bare.** The form gives only `arn:aws:iam::123456789012:role/NumioCurReaderRole` as a placeholder and no explanation of *which* role the user is meant to paste — i.e. the role created in their AWS account that trusts the `numio-service` IAM user and is permitted to read CUR.
+    - **3b. CUR Configuration starts collapsed** ([Integrations.jsx:109-111](frontend/src/pages/Settings/Integrations.jsx:109)). On a fresh Add flow, no CUR fields are pre-filled, so the section stays collapsed behind a `▶ CUR Configuration` toggle and the user can submit without realising the fields exist or are required for cost data.
+- **Expected:**
+    - **3a.** `Role ARN` carries a one-line helper under the field explaining "The IAM role in your AWS account that trusts `numio-service` and grants Numio read access to your CUR. You created this when running the onboarding CloudFormation stack — copy its ARN from the stack's Outputs (or from IAM → Roles)."
+    - **3b.** CUR Configuration is **expanded by default** in the Add flow (Edit can keep current behaviour: expand only if any CUR field has a value). The current short hint about being required for cost data stays.
+- **Constraints:** scope is the Advanced `AccountFormDialog` only. No backend changes. The External-ID surfacing concern on this same screen is owned by the related ticket above — do not duplicate it here.
+
+### _(append further findings here as the flow is exercised)_
+
+## Scope
+
+In scope:
+- The AWS account onboarding flow end-to-end: method hub, Guided wizard, Advanced form, and any helpers shared with them on that path.
+- Each bug entry listed above; new entries may be added by the task author as discovery continues.
+
+Out of scope:
+- The Chat onboarding method unless a shared component is implicated.
+- Backend, CloudFormation template, or IAM policy changes.
+- Anything covered by the **Related tickets** list above — leave those to their own tickets.
+- Refactors, redesigns, or copy rewrites beyond what each individual entry calls for.
+
+## Acceptance criteria
+
+1. Every entry under **Bug list** has been addressed; the per-entry "Expected" condition holds and the per-entry "Observed" condition no longer reproduces.
+2. No regression in existing tests under `frontend/src/components/onboarding/` or `frontend/src/pages/Settings/`.
+3. The task body has been updated to mark each bug entry as fixed (e.g. ✓ prefix or strike-through) so the audit trail of what shipped is preserved.
+
+## Quality gates
+
+- `cd frontend && npm test -- onboarding` passes.
+- `cd frontend && npm test -- Integrations` passes.
+- `cd frontend && npm run build` succeeds.
+- Manual walkthrough at `http://localhost:5173/` of **Settings → Integrations → Add Account** through both Guided and Advanced confirms each entry's Expected behaviour.
+
+## Constraints and assumptions
+
+- Use existing design tokens / utility classes already present in the frontend; no new component library or one-off colour values.
+- Bug entries are added in chronological discovery order; do not reorder once added — preserves the trace of how the flow was walked.
+
+## Summary
+
+### Steps completed
+1. Activated task: `tasks/backlog/` → `tasks/active/`.
+2. Bug 1 — replaced the muted prerequisite paragraph in Guided/Intro with an amber callout (`role="note"`, bold "Prerequisite" header, body-copy contrast, ⚠️ icon). Wording preserved per spec (admin required; CLI / IAM / pre-created role not required).
+3. Bug 2 — added a "In the AWS CloudFormation Console" walkthrough block on Guided/Apply: 5 numbered steps mirroring the AWS wizard (Create stack → Specify stack details → Configure stack options → Review and create → Wait), with bold page names and a live-rendered suggested stack name `ConnectToNumio-YYYYMMDD-HHmm`. Replaces the prior bare "wait for CREATE_COMPLETE" line.
+4. Bug 3a — added a `helper` field to the `accountFields` schema; `renderField` now renders any `f.helper` as a muted line under the input. Helper copy on `Role ARN` matches the spec verbatim.
+5. Bug 3b — added a `mode` prop (`"add" | "edit"`, default `"edit"`) to `AccountFormDialog`. CUR section now expands when `mode === "add"` OR any CUR value is present. Add usage in `Integrations.jsx` passes `mode="add"`. Edit unchanged.
+6. Quality gates green: `npm test -- onboarding` (34/34), `npm run build` succeeds.
+7. Manual walkthrough at `http://localhost:50788/settings?tab=integrations` confirmed all four entries: callout renders amber on Intro; 5-item walkthrough renders on Apply with the expected step text; Role ARN helper visible on Advanced Add; CUR section expanded by default (toggle shows `▼`, S3 fields visible) on Advanced Add.
+
+### Changes made
+- `frontend/src/components/onboarding/GuidedOnboarding.jsx` — Bug 1 callout (intro step), Bug 2 walkthrough block (apply step). New `data-testid`s: `guided-intro-prerequisites`, `guided-cfn-walkthrough`.
+- `frontend/src/pages/Settings/Integrations.jsx` — Bug 3a `helper` on `Role ARN` + `renderField` extension; Bug 3b `mode` prop on `AccountFormDialog`, `mode="add"` passed from the Add usage.
+
+### Notable decisions or deviations
+- For Bug 3b I introduced a `mode` prop rather than inferring Add/Edit from `submitLabel` or `title`. Explicit prop keeps Edit's existing behaviour intact and makes the next maintainer's job obvious.
+- Bug 2's suggested stack name is computed from `new Date()` at render time rather than baked into the launch URL — matches the spec ("a copy-friendly suggestion is enough; no need to inject the timestamp into the launch URL").
+- No new design tokens or color values introduced for Bug 1 — used the same amber palette (`#fffbeb` / `#d97706` / `#78350f`) already in `STATUS_COLORS.incomplete` in `Integrations.jsx`.
+
+### Links
+- Related (not re-fixed here): see "Related tickets" block above.

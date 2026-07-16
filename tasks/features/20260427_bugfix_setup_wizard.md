@@ -1,0 +1,19 @@
+---
+status: backlog
+slug: bugfix_setup_wizard
+title: Collection bugs discovered during QA
+---
+
+# Collection bugs discovered during QA
+
+In no particular order, there are list of bugs discovered during QA and documenbted in tasks:
+
+- @20260426_bugfix_guided_verify_button_no_feedback.md
+- @20260426_bugfix_guided_wizard_state_persistence.md
+- @20260426_bugfix_guided_create_cur_and_bucket_option.md
+
+
+## Success metrics
+
+- Each task in the list is implemented, tested and accpted by user
+

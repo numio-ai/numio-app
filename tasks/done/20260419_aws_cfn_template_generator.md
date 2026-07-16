@@ -1,0 +1,72 @@
+---
+status: done
+kind: task
+feature: aws_onboarding_ux_redesign
+title: CloudFormation tenant-template generator for AWS onboarding
+---
+
+# CloudFormation tenant-template generator for AWS onboarding
+
+## Problem statement
+
+Other onboarding methods (Guided wizard, Chat v0) need a per-tenant CloudFormation template that creates all AWS-side prerequisites in a single applied stack. Today users assemble IAM policy, role, trust policy, and CUR permissions by hand across multiple AWS Console screens — the primary friction called out in the 2026-04-19 user test.
+
+## Scope
+
+In scope:
+- Backend endpoint that emits a CFN template scoped to the caller's workspace.
+- Template provisions: the `NumioCurReaderRole` IAM role, trust policy bound to the workspace's external ID, inline policy granting CUR bucket read and resource-tagging read, and optional CUR export scaffolding when the user opts in.
+- Response includes template body, downloadable file URL, and an AWS-Console **Launch Stack** URL with the template pre-loaded.
+- Admin-authenticated; auth-aware when `AUTH_ENABLED=true`.
+
+Out of scope:
+- Terraform variant (deferred; see feature scope).
+- Applying the stack on the user's behalf.
+- Multi-region, multi-account, or AWS Organizations templates.
+- Rotating or reissuing the workspace's external ID.
+
+## Acceptance criteria
+
+- Endpoint returns a valid CloudFormation template that passes the AWS CFN linter.
+- External ID embedded in the template matches `workspaces.external_id` for the caller's workspace.
+- Manual apply of the template in a real AWS account creates a role that Numio can assume and read CUR from, with end-to-end ingestion succeeding against that stack.
+- Launch Stack URL opens AWS CloudFormation in the caller's chosen region with the template pre-loaded.
+- Endpoint is admin-only and rejects unauthenticated requests when auth is enabled.
+
+## Quality gates
+
+- `cd backend && uv run pytest` covers unit tests for template rendering (external ID placement, role/policy structure, region handling).
+- One manual apply against a real AWS account (for example the existing test account `123456789012`), with end-to-end ingestion documented in the completion summary.
+- Code review confirms no secrets beyond the external ID are embedded in the template.
+
+## Summary
+
+### Steps completed
+1. Added a new `numio.onboarding.cfn_template` module that renders a per-tenant CloudFormation template as YAML and builds an AWS-Console launch URL. No AWS SDK dependency — pure Python + PyYAML.
+2. Added `numio.api.onboarding` exposing three admin-only endpoints:
+   - `GET /api/v1/onboarding/cfn-template` — returns template body, launch URL, download URL, launch mode.
+   - `GET /api/v1/onboarding/cfn-template/download` — returns the YAML as an `application/x-yaml` attachment.
+   - `GET /api/v1/onboarding/features` — surfaces the `ONBOARDING_CHAT_ENABLED` flag for the UI.
+3. Added two settings: `public_base_url` (drives quick-create vs upload launch mode) and `onboarding_chat_enabled` (chat v0 gate).
+4. Registered the new router in `numio.main` and added `PyYAML` as an explicit dependency.
+5. Added 18 unit + endpoint tests in `tests/test_onboarding_cfn.py` (template shape, external-id embedding, trust policy binding, launch URL variants, endpoint contract, CUR pre-fills).
+
+### Changes made
+- `backend/src/numio/onboarding/__init__.py` (new)
+- `backend/src/numio/onboarding/cfn_template.py` (new)
+- `backend/src/numio/api/onboarding.py` (new)
+- `backend/src/numio/core/config.py` — added `public_base_url`, `onboarding_chat_enabled`
+- `backend/src/numio/main.py` — registered onboarding router
+- `backend/pyproject.toml` — added `PyYAML>=6.0` dependency
+- `backend/tests/test_onboarding_cfn.py` (new)
+- `docs/ops-runbook.md` — new AWS onboarding env var table (`PUBLIC_BASE_URL`, `ONBOARDING_CHAT_ENABLED`)
+
+### Notable decisions and deviations
+- **`WorkspaceExternalId` is not `NoEcho`.** Initial design used `NoEcho: true`, but `cfn-lint` rule W2010 flagged it because the parameter is echoed in `Outputs` so the user can copy it back into Numio. The external id is a non-secret binding identifier (public in the role's trust policy regardless), so removing `NoEcho` is the correct trade-off.
+- **Echoed CUR parameters in `Outputs`.** `CurBucketName`, `CurPathPrefix`, `CurReportName` appear as outputs so the customer has a single CloudFormation pane to copy all values back into Numio and `cfn-lint` does not flag them as unused.
+- **Launch URL has two modes.** `quickcreate` when `PUBLIC_BASE_URL` is set (template pre-loaded via `templateURL`); `upload` otherwise (URL lands on the generic create-stack page and the user uploads the downloaded file). Local dev defaults to `upload`. The response body returns `launch_mode` so the wizard UI can render step copy accordingly.
+- **Manual AWS apply is deferred.** The autonomous session has no AWS console access, so the acceptance criterion `Manual apply of the template in a real AWS account ... with end-to-end ingestion` is **unverified in this task**. The template has been validated with `cfn-lint` (zero warnings, zero errors) and a full YAML schema round-trip. Follow-up: a human operator must apply the rendered template against account `123456789012`, copy the Outputs back into Numio, and confirm end-to-end CUR ingestion before the parent feature closes.
+
+### Verification
+- `cd backend && VIRTUAL_ENV=.venv uv run --active pytest tests/` — **514 passed**.
+- `cfn-lint /tmp/numio-cfn.yaml` — **0 errors, 0 warnings** on the rendered template.

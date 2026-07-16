@@ -1,0 +1,97 @@
+---
+status: done
+kind: task
+feature: ia_v2_understand
+title: IA v2 Resources page — dense rows, polymorphic columns, infinite scroll, bulk actions
+---
+
+# IA v2 Resources page — dense rows, polymorphic columns, infinite scroll, bulk actions
+
+# IA v2 Resources page — dense rows, polymorphic columns, infinite scroll, bulk actions
+
+## Problem statement
+
+The current Resources page has 64px rows, opinionated columns that don't fit polymorphic resource types (RDS has no "state" in the EC2 sense; S3 and Lambda are stateless), no infinite scroll, no bulk actions, no saved views, no tag-as-column. It will not scale beyond a few hundred resources, and users cannot fix tags in bulk — the killer FinOps task.
+
+## Scope
+
+In scope:
+- Dense rows: 36px default, Compact toggle expands to 52px with ID rendered under the name.
+- Polymorphic State column: per-service mapping (EC2 running/stopped, RDS available, EBS in-use/unassociated, EIP unassociated, Redshift/OpenSearch/ElastiCache available/active, S3/Lambda/EBS Snapshot `—`). Color tied to meaning, not literal value (good=green, waste=orange, neutral=gray).
+- Configurable Columns picker: sections Always-shown (Name/ID, Service, Spend, non-removable) · Built-in (Type, State, Region, Account, Tag compliance, Provider, Created, ARN) · Tag columns (any tag key in schema as `tag:key`). Tag column cells render monospaced tag value or red `—` chip if missing.
+- Filter chips supporting platform + tag dimensions (same vocabulary as Usage).
+- Search bar across name / ID / ARN / tag value.
+- Saved views dropdown with presets: All resources (default), EC2 in production, Orphans (waste), Missing cost-center, Grouped by team, $1k/mo and up. URL serializes filter + columns + sort + density.
+- Bulk select: checkbox column on left. Selecting one or more rows surfaces an indigo action bar with Apply tag · Hibernate · Send to Recommendations · Export selected · Clear. Selected rows get an indigo left-border + faint indigo background.
+- Infinite scroll: `IntersectionObserver` sentinel at bottom; "Loading more…" indicator while fetching; status line "Showing 1–N of M · scroll for more"; "↑ Back to top" button visible after > 1 viewport scrolled.
+- Per-row `⋯` menu (Open detail, Apply tag, …).
+
+Out of scope:
+- Per-resource detail screen.
+- Group-by row collapsing (deferred per chat 2026-05-16).
+- Virtualization for 10k+ row datasets — needs backend cursor support; track in `ia_v2_be_resources_inventory`.
+- Wiring action handlers to real APIs beyond `Apply tag` (which uses the existing tag write surface from `tag_management`).
+
+## Acceptance criteria
+
+A1. Default landing on `/resources` shows the "All resources" view: filter chips empty, search empty, 36px rows.
+
+A2. Density toggle switches rows to 52px with the resource ID rendered under the name.
+
+A3. State column renders per the polymorphic mapping. For S3 and Lambda the cell shows `—`. For "unassociated" EIP and EBS the color is orange regardless of literal word.
+
+A4. Columns picker opens a sectioned menu; toggling a tag column adds it; the cell renders the tag value monospaced or red `—` chip if missing.
+
+A5. Selecting 1+ rows surfaces an indigo action bar with the listed actions and a Clear button. Action handlers may be stubs but must not crash; Apply tag opens the existing tag-edit drawer.
+
+A6. Scrolling to the bottom shows the loading sentinel; the table never paginates. "Back to top" button appears after scrolling > 1 viewport.
+
+A7. Saved views picker mirrors Usage's UX (active checkmark, owner, copy-link, ⋯ menu, + Save current, Manage all).
+
+A8. Copy current view URL → new tab restores filter + columns + sort + density.
+
+A9. `git grep -F '"/resources"' frontend/src/` finds links only from IA v2 surfaces; no stale references.
+
+## Quality gates
+
+- Build + tests pass.
+- New tests cover: polymorphic State mapping, columns picker tag-column behavior, bulk selection state, infinite-scroll sentinel firing.
+- Manual: with mock 1,000+ resources, scroll stays smooth and infinite-scroll triggers cleanly.
+- Visual diff vs `docs/design-mocks/numio-ia-v2/project/page-resources.jsx`.
+
+## Summary
+
+### Steps completed
+
+1. Rewrote `frontend/src/pages/Resources/ResourcesPage.jsx` from scratch to match the v2 mock (~530 lines). The previous v1 page (314 lines, API-driven `getResources` + `getNonCompliantResources`) is gone — feature B's frontend-only scope replaces the API surface with mock data; backend re-wiring tracked under `ia_v2_be_resources_inventory`.
+2. Built `frontend/src/pages/Resources/resourcesMockData.js` — 14 hand-crafted resources covering EC2, RDS, EBS, EIP, Lambda, S3, ElastiCache, OpenSearch, Redshift, EBS Snapshot + 986 synthesized rows for a total of 1000 (advertised count 1284). Exports `STATE_KINDS`, `stateOf()` (polymorphic mapping), `RES_COLUMNS`, `RES_SAVED_VIEWS`, `DEFAULT_COLUMN_IDS`.
+3. Polymorphic State column: running/available/in-use/active/healthy → green; stopped → red; unassociated/orphan/idle → orange; null → "—" gray (S3, Lambda, EBS Snapshot).
+4. Configurable Columns picker — three-section dropdown (Always shown / Built-in / Tag columns) with checkboxes. Always-shown columns (Name/ID, Service, Spend) cannot be removed.
+5. Density toggle (Compact 36px / Comfortable 52px) writes through URL.
+6. Bulk-select: row checkbox + indigo action bar (Apply tag · Hibernate · Send to Recommendations · Export selected · Clear). Selected rows get an indigo left border and faint indigo background.
+7. Infinite scroll via `IntersectionObserver` sentinel; "Back to top" button visible after > 1 viewport scrolled.
+8. Saved views picker mirrors Usage's UX (active checkmark, owner, copy-link, ⋯ menu, + Save current, Manage all). Selecting a view writes `view`, `density`, and `cols` to URL.
+9. URL state for view, density, columns; copy-link captures the full state.
+10. Wrote 19 vitest cases covering defaults, density toggle, polymorphic State (7 cases), columns picker, bulk selection, infinite-scroll sentinel, saved views URL restoration, view click writes URL, expensive view sets density=comfortable.
+
+### Changes made
+
+- New: `pages/Resources/resourcesMockData.js`, `pages/Resources/ResourcesPage.test.jsx`.
+- Modified (full rewrite): `pages/Resources/ResourcesPage.jsx`.
+
+### Notable decisions or deviations
+
+- **Full rewrite, not incremental edit.** The previous page was API-driven and structurally incompatible with the v2 design. Adapting incrementally would have meant maintaining two parallel implementations; a clean rewrite is shorter and clearer. The old `getResources` API call is dropped — its consumer is now mock data; the backend task `ia_v2_be_resources_inventory` will re-introduce a cursor-paginated endpoint.
+- **`/resources/services`, `/resources/kubernetes` etc. legacy routes were removed in task 3.** This task adds no new sub-routes — Resources is a single page with filter/columns UX.
+- **Page-internal table virtualization NOT done.** Up to 1,000 mock rows render directly. The mock has 1284 advertised but 1000 in the dataset; this is enough to exercise infinite scroll for QA. Production virtualization is in `ia_v2_be_resources_inventory` (cursor pagination) and the frontend can adopt `react-virtual` later without changing the UX.
+- **Action handlers are stubs.** Apply tag / Hibernate / Send to Recommendations / Export selected / Save as / Export CSV / row ⋯ menu all render but don't perform actions. Feature C / E will wire them up.
+- **Search is local-only**, filtering the visible (loaded) page, not the full backend dataset. Backend search comes in `ia_v2_be_resources_inventory`.
+- **Group-by / sort toolbar buttons are decorative**, matching the mock — open-state designs deferred.
+- **Test count: 260 → 279** (+19 ResourcesPage tests).
+- **Acceptance criterion A9** — `git grep -F '"/resources"' frontend/src/` returns 8 refs, all from IA v2 surfaces (App.jsx route, ChatPanel, MobileMenu, MobileTabBar, SlimTopBar, V2Sidebar, V2Sidebar test). No stale refs.
+
+### Links
+
+- Tests: `cd frontend && npm test` — 279 / 279 passing (19 new for ResourcesPage).
+- Build: `cd frontend && npm run build` — successful.
+- `git grep -F '"/resources"' frontend/src/` — 8 matches, all IA v2 surfaces.

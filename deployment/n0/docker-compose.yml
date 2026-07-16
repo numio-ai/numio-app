@@ -1,0 +1,63 @@
+# Numio Docker Compose - Production (n0) TEMPLATE
+#
+# This is a TEMPLATE file processed by numio-dev.sh deploy.
+# The deploy script uses envsubst to bake ECR image URIs into the final
+# docker-compose.yml that gets deployed to /data/numio/.
+#
+# DO NOT use this file directly - use numio-dev.sh deploy --host=n0
+#
+# Services:
+#   - backend: FastAPI + MCP server (internal port 8000)
+#   - frontend: nginx serving React app (internal port 80)
+#   - caddy: TLS termination and reverse proxy (ports 80, 443)
+#
+# External traffic routes through Caddy only.
+
+services:
+  backend:
+    image: ${BACKEND_IMAGE}
+    container_name: numio-srv
+    restart: always
+    env_file:
+      - .env
+    expose:
+      - "8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health').read()"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  frontend:
+    image: ${FRONTEND_IMAGE}
+    container_name: numio-ui
+    restart: always
+    expose:
+      - "80"
+    depends_on:
+      - backend
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:80/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: numio-caddy
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - /data/caddy_data:/data
+      - /data/caddy_config:/config
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:80/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s

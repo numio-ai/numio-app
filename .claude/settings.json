@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__puppeteer__puppeteer_screenshot",
+      "Bash(./scripts/taskman.sh list *)",
+      "Bash(./scripts/taskman.sh validate *)",
+      "Bash(./scripts/numio-dev.sh status *)"
+    ]
+  },
+  "enabledPlugins": {
+    "agn@agenture": true
+  }
+}

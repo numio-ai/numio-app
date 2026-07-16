@@ -1,0 +1,48 @@
+/**
+ * Numio design system tokens — Overview benchmark.
+ * Apply globally to every page.
+ */
+:root {
+  /* Layout */
+  --sidebar-width-expanded: 220px;
+  --sidebar-width-collapsed: 56px;
+  --topbar-height: 44px;
+  --content-padding: 24px;
+  --card-gap: 16px;
+  /** Spacing between consecutive text blocks / sections (use for marginTop or marginBottom). */
+  --block-spacing: 10px;
+
+  /* Colors */
+  --bg-page: #f7f7f7;
+  --bg-surface: #ffffff;
+  --border: #efefef;
+  --border-hover: #d1d5db;
+  --text-primary: #111827;
+  --text-secondary: #374151;
+  --text-muted: #6b7280;
+  --text-xs-muted: #9ca3af;
+  --accent: #2563eb;
+  --success: #16a34a;
+  --success-bg: #f0fdf4;
+  --warning: #d97706;
+  --warning-bg: #fffbeb;
+  --danger: #dc2626;
+  --danger-bg: #fef2f2;
+  --neutral: #6b7280;
+  --neutral-bg: #f9fafb;
+
+  /* AI accent — use for AI alert icons, AI budget card, AI pulse banner, AI events */
+  --ai-accent: #6366f1;
+  --ai-accent-light: #eef2ff;
+  --ai-accent-text: #4f46e5;
+
+  /* Typography */
+  --font: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+  --text-label: 11px;
+  --text-sm: 13px;
+  --text-base: 14px;
+  --text-lg: 16px;
+  --text-xl: 20px;
+  --text-2xl: 28px;
+  --text-3xl: 32px;
+}

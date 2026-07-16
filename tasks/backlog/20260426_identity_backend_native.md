@@ -1,0 +1,40 @@
+---
+status: backlog
+kind: task
+feature: user_management
+title: Identity backend interface and native implementation
+---
+
+# Identity backend interface and native implementation
+
+## Problem statement
+
+Spec R1 requires a pluggable `IdentityBackend` interface with a Native implementation. Today the auth code path is bypass-only.
+
+## Scope
+
+In scope:
+- Define `IdentityBackend` Python protocol.
+- Implement `NativeIdentityBackend` with `authenticate`, `create_user`, `update_user`, `disable_user`, `enable_user`, `set_password`, `list_users`.
+- Argon2id password hashing via passlib.
+- Setup-token issuance and consumption helpers (sha256 hashing of tokens).
+- Email normalization to lowercase on read and write.
+- Last-admin guard logic (typed exception).
+
+Out of scope:
+- HTTP endpoints (covered by `first_admin_bootstrap_api`, `auth_endpoints_native`, `user_crud_admin_api`, `self_service_profile_api`).
+- Cognito implementation (preserved as-is, deferred to `cognito_backend_wiring`).
+
+## Acceptance criteria
+
+- `IdentityBackend` is a single Python protocol; `NativeIdentityBackend` implements it.
+- `authenticate` returns a `User` only when credentials match AND `is_active=true`.
+- `disable_user` / role change raises a typed `LastAdminGuard` exception when the action would leave zero active admins.
+- Email always normalized to lowercase before any DB read or write.
+- Setup tokens are sha256-hashed in the DB; raw token returned only at issuance.
+
+## Quality gates
+
+- `cd backend && VIRTUAL_ENV=.venv uv run --active pytest tests/test_identity_backend_native.py` passes.
+- Coverage for the new module ≥ 90%.
+- `uv run ruff check .` and `uv run ruff format --check .` pass.

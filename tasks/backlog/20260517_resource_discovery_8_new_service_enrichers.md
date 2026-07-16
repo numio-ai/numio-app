@@ -1,0 +1,82 @@
+---
+status: backlog
+kind: task
+feature: aws_resource_discovery_v2
+title: Resource discovery — 8 new service enrichers
+---
+
+# Resource discovery — 8 new service enrichers
+
+# Resource discovery — 8 new service enrichers
+
+## Problem statement
+
+The existing `resource_inventory_service.py` has 6 per-service enrichers (Lambda, EC2, EBS, EIP, S3, RDS). The user-validated list of services requiring first-class metadata is 14. 8 services lack enrichers: ECS, EKS, SageMaker, Bedrock, DynamoDB, ElastiCache (Redis/Valkey), ELB (alb/nlb/clb), CloudFront. The RGTA universe-scan task makes these resources visible at all; this task adds the metadata that downstream features (recommendations, autopilot, governance) need.
+
+## Scope
+
+In scope, one enricher function per service following the existing pattern in `_discover_ec2_instances` / `_discover_rds_instances`:
+
+- `_discover_ecs_resources` — clusters + services. `resource_metadata`: cluster status, service count per cluster, desired/running task count, launch type.
+- `_discover_eks_clusters` — clusters + nodegroups. `resource_metadata`: cluster version, status, endpoint, nodegroup count, fargate profile count.
+- `_discover_sagemaker_resources` — notebook instances, endpoints, training jobs. `resource_metadata`: instance type, state, framework (per resource sub-type).
+- `_discover_bedrock_resources` — custom models, agents, knowledge bases. `resource_metadata`: status, base model id, agent state.
+- `_discover_dynamodb_tables` — tables. `resource_metadata`: status, billing mode, item count (if available), table size bytes.
+- `_discover_elasticache_clusters` — Redis + Valkey clusters. `resource_metadata`: engine, engine version, node type, num_cache_nodes, status.
+- `_discover_elb_load_balancers` — ALB / NLB (elbv2) + CLB (elb). `resource_metadata`: type (application/network/classic), scheme, state, target group count.
+- `_discover_cloudfront_distributions` — distributions (global, not per-region). `resource_metadata`: enabled, status, domain name, price class, origin count.
+
+Each enricher:
+- Uses boto3 paginator where the API supports it.
+- Calls `list_tags_for_resource(ResourceName=arn)` (or service-specific equivalent) to enrich tags. Falls back to RGTA-supplied tags when the per-service API does not expose tags directly.
+- Catches `ClientError` per region with the same skip/log discipline as existing enrichers.
+- Upserts via the existing `_upsert_batch` helper (or a small refactor if needed to accept arbitrary metadata).
+
+CloudFront is a global service — it runs once per account, not once per region (mirror the S3 buckets pattern).
+
+In scope also: extend `_run_resource_inventory_sync` to call the 8 new enrichers inside the per-region loop. Extend `test_resource_inventory.py` with one test per enricher (mocked boto client, asserts upsert + metadata).
+
+In scope also: update IAM permissions in the CFN template / onboarding docs:
+
+- `ecs:DescribeClusters`, `ecs:ListClusters`, `ecs:ListServices`, `ecs:DescribeServices`
+- `eks:DescribeCluster`, `eks:ListClusters`, `eks:ListNodegroups`, `eks:DescribeNodegroup`
+- `sagemaker:ListNotebookInstances`, `sagemaker:ListEndpoints`, `sagemaker:ListTrainingJobs`, `sagemaker:ListTags`
+- `bedrock:ListCustomModels`, `bedrock:ListAgents`, `bedrock:ListKnowledgeBases`
+- `dynamodb:ListTables`, `dynamodb:DescribeTable`, `dynamodb:ListTagsOfResource`
+- `elasticache:DescribeCacheClusters`, `elasticache:ListTagsForResource`
+- `elasticloadbalancing:DescribeLoadBalancers` (v1 + v2), `elasticloadbalancing:DescribeTags`
+- `cloudfront:ListDistributions`, `cloudfront:ListTagsForResource`
+
+Out of scope:
+- ARN parsing refactor — keep inline per existing convention.
+- Throttle backoff helpers — boto3 default retries are sufficient.
+- Sub-resources beyond the listed ones (e.g. ECS tasks, SageMaker pipelines, Bedrock model invocations) — these are deferred.
+- Real AWS smoke testing — manual verification via the test account is sufficient.
+
+## Acceptance criteria
+
+A1. With a mocked boto session for each of the 8 services, calling the enricher upserts the expected `cloud_resources` rows with `service`, `resource_id`, `arn`, `region` (or NULL for CloudFront), `tags`, and `resource_metadata` populated.
+
+A2. `_run_resource_inventory_sync` returns a total count that includes the new services; logs include per-service per-region counts; per-region `ClientError` for one new service does not block the others.
+
+A3. Per-service tests in `backend/tests/test_resource_inventory.py` pass: one test class per new enricher.
+
+A4. CloudFront enricher runs once per account at the start of the run (mirroring S3), not once per region; verified by counting boto client constructions in a mocked test.
+
+A5. The CFN template (`backend/src/numio/onboarding/cfn_template.py` or wherever the customer IAM policy lives) is extended with the new permissions. The Verify step's IAM check confirms the new permissions are grantable.
+
+A6. Onboarding documentation (whichever doc the user follows when creating the role) lists the new permissions and what they enable.
+
+## Quality gates
+
+- All existing tests in `test_resource_inventory.py` continue to pass.
+- New tests for the 8 enrichers pass.
+- `uv run ruff check` on the changed files.
+- Manual: trigger the job against a real connected test account that has at least one DynamoDB table and one ELB; confirm the rows appear with metadata via `SELECT * FROM cloud_resources WHERE service IN ('dynamodb', 'elbv2');`.
+
+## Constraints and assumptions
+
+- Depends on the RGTA universe scan task being merged first only insofar as the IAM doc updates are merged — code-wise the two tasks are independent.
+- Reuses `assume_role_for_account` + `_get_session` per `docs/conventions/numio-patterns.md` §5.
+- Reuses `_upsert_batch` helper or a minimally-extended version. Avoid duplicating the upsert logic.
+- The existing `BATCH_SIZE=500` constant is fine for the new enrichers.

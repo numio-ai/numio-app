@@ -1,0 +1,45 @@
+# Numio Docker Compose - Localhost
+#
+# Complete compose file for local containerized development.
+# Uses locally-built images (numio-srv:latest, numio-ui:latest).
+#
+# Usage:
+#   cd ~/opt/numio
+#   ./numio-ctl.sh start
+#
+# Services:
+#   - backend: FastAPI + MCP server (port 8000)
+#   - frontend: nginx serving React app (port 3000)
+#
+# No Caddy - direct HTTP access to services.
+
+services:
+  backend:
+    image: ${BACKEND_IMAGE:-numio-srv:latest}
+    container_name: numio-srv
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health').read()"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  frontend:
+    image: ${FRONTEND_IMAGE:-numio-ui:latest}
+    container_name: numio-ui
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:80/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
