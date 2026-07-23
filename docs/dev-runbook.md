@@ -6,8 +6,25 @@
 - Python 3.12+
 - [uv](https://docs.astral.sh/uv/) (Python package manager)
 - Docker (required — runs PostgreSQL and Valkey as containers)
+- [gitleaks](https://github.com/gitleaks/gitleaks) (secret scanner, required by the git pre-commit hook — `brew install gitleaks`)
 
 Use the `numio-dev.sh init` command as shortcut to install dependencies for frontend and backend before starting the development environment.
+
+---
+
+## Secret scanning (git pre-commit hook)
+
+Every commit is scanned for secrets (keys, tokens, passwords) by gitleaks via the committed hook [`.githooks/pre-commit`](../.githooks/pre-commit). A finding aborts the commit. The hook is fail-closed: if gitleaks is not installed, the commit is refused with install instructions.
+
+Enrollment is per-checkout: `./scripts/numio-dev.sh init` enrolls it by setting `git config core.hooksPath .githooks`. For any checkout that hasn't run `init`, enroll manually:
+
+```bash
+git config core.hooksPath .githooks
+```
+
+For a deliberate false positive (e.g. a documented dummy credential), append a `# gitleaks:allow` comment on the flagged line.
+
+Note: this is a client-side control only — `git commit --no-verify` bypasses it, and it protects nothing until a checkout is enrolled. A hard guarantee requires server-side scanning (CI or pre-receive), which is out of scope here.
 
 ---
 

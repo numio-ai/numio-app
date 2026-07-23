@@ -103,6 +103,10 @@ cmd_init() {
   require_cmd npm
   require_cmd uv
   require_cmd docker
+  require_cmd gitleaks
+
+  log_info "Enabling git pre-commit secret scanning (gitleaks)..."
+  git -C "${PROJECT_DIR}" config core.hooksPath .githooks
 
   log_info "Installing frontend dependencies..."
   cd "${PROJECT_DIR}/frontend"
